@@ -10,7 +10,7 @@ Este documento consolida o backend necessário para rodar o app fora do modo loc
   - trigger de `atualizado_em` para receitas;
   - RPC `criar_estabelecimento_com_usuario` para criar a primeira unidade do usuário autenticado sem quebrar RLS;
   - trigger `receita_itens_validar_ref` para impedir itens apontando para outro estabelecimento ou autorreferência direta.
-- Edge Function `ai-recipe-import` com OpenAI server-side, schema JSON, limite de texto/imagem e rate limit.
+- Edge Function `ai-recipe-import` com validação real de usuário autenticado antes de ler `OPENAI_API_KEY`, OpenAI server-side, schema JSON, limite de texto/imagem e rate limit.
 - `supabase/config.toml` com `verify_jwt = true` para produção.
 - Script `npm run audit:backend` para checagens estáticas do backend.
 
@@ -64,6 +64,6 @@ npm run build
 - [ ] Usuários autenticados conseguem criar o primeiro estabelecimento via RPC.
 - [ ] RLS bloqueia acesso a estabelecimentos não vinculados.
 - [ ] `OPENAI_API_KEY` configurada como secret da Edge Function, nunca no frontend.
-- [ ] `ai-recipe-import` deployada com `verify_jwt = true`.
+- [ ] `ai-recipe-import` deployada com `verify_jwt = true` e testada sem usuário logado para confirmar erro `auth_required`.
 - [ ] Frontend publicado com `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`.
 - [ ] Fluxo completo validado: Mercadorias → Fichas → Cardápio → Exportações → Importação IA.

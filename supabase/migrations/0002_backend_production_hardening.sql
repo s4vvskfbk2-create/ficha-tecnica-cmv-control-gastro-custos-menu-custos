@@ -76,7 +76,7 @@ begin
 
   if not exists (select 1 from pg_constraint where conname = 'receita_itens_valores_chk') then
     alter table public.receita_itens
-      add constraint receita_itens_valores_chk check (ordem >= 0 and qtd_liquida >= 0 and perc_aproveitamento > 0);
+      add constraint receita_itens_valores_chk check (ordem >= 0 and qtd_liquida >= 0 and perc_aproveitamento >= 0);
   end if;
 
   if not exists (select 1 from pg_constraint where conname = 'custos_extras_valor_nonnegative_chk') then
@@ -89,9 +89,9 @@ begin
       add constraint porcoes_unidade_chk check (unidade in ('g','kg','ml','L','un','cx','pct'));
   end if;
 
-  if not exists (select 1 from pg_constraint where conname = 'porcoes_quantidade_positive_chk') then
+  if not exists (select 1 from pg_constraint where conname = 'porcoes_quantidade_nonnegative_chk') then
     alter table public.porcoes
-      add constraint porcoes_quantidade_positive_chk check (quantidade_que_faz > 0);
+      add constraint porcoes_quantidade_nonnegative_chk check (quantidade_que_faz >= 0);
   end if;
 end $$;
 
