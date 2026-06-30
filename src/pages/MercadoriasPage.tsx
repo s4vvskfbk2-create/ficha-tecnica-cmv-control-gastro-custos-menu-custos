@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useStore } from '../lib/store'
 import { custoUnitario, formatBRL, formatBRL4, formatNum } from '../lib/calc'
-import { exportMercadoriasExcel } from '../lib/excel'
 import { supabaseConfigured } from '../lib/supabase'
 import { UNIDADES, type Mercadoria, type MercadoriaInput, type PrecoHist, type Unidade } from '../lib/types'
 
@@ -78,6 +77,11 @@ export default function MercadoriasPage() {
     await excluirMercadoria(m.id)
   }
 
+  async function baixarExcel() {
+    const { exportMercadoriasExcel } = await import('../lib/excel')
+    await exportMercadoriasExcel(mercadorias, `mercadorias-${estabelecimento?.nome ?? ''}`)
+  }
+
   return (
     <>
       <div className="page-head">
@@ -86,11 +90,7 @@ export default function MercadoriasPage() {
           <div className="sub">Insumos base e preços de compra — {estabelecimento?.nome}.</div>
         </div>
         <div className="toolbar">
-          <button
-            className="btn"
-            onClick={() => exportMercadoriasExcel(mercadorias, `mercadorias-${estabelecimento?.nome ?? ''}`)}
-            disabled={!mercadorias.length}
-          >
+          <button className="btn" onClick={baixarExcel} disabled={!mercadorias.length}>
             ⬇ Excel (fórmulas vivas)
           </button>
         </div>

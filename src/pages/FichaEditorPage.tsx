@@ -13,8 +13,6 @@ import {
   formatX,
 } from '../lib/calc'
 import { avaliarCMV } from '../lib/benchmark'
-import { exportFichaExcel } from '../lib/excel'
-import { exportFichaPDF } from '../lib/pdf'
 import { UNIDADES, type CustoExtra, type Porcao, type Receita, type ReceitaItem, type Unidade } from '../lib/types'
 
 type Vista = 'gerencial' | 'operacional'
@@ -164,10 +162,12 @@ export default function FichaEditorPage() {
     }
   }
 
-  function exportarExcel() {
-    exportFichaExcel(header!, calc!.ctx, extras, porcoes)
+  async function exportarExcel() {
+    const { exportFichaExcel } = await import('../lib/excel')
+    await exportFichaExcel(header!, calc!.ctx, extras, porcoes)
   }
-  function exportarPDF() {
+  async function exportarPDF() {
+    const { exportFichaPDF } = await import('../lib/pdf')
     exportFichaPDF(header!, calc!.ctx, porcoes, segmento)
   }
 

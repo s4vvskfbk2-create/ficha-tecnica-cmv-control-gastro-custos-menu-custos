@@ -8,4 +8,9 @@ export default defineConfig({
     port: 5173,
     host: true,
   },
+  build: {
+    // exceljs/jspdf são carregados sob demanda (import dinâmico nos exports),
+    // então o chunk grande deles não afeta o carregamento inicial do app.
+    chunkSizeWarningLimit: 1000,
+  },
 })
