@@ -49,21 +49,3 @@ aplicar o patch `codex-4848ffe.patch` sobre este branch.
 
 Só `src/lib/aiRecipe.ts` e `docs/AI_RECIPE_IMPORT.md` se sobrepõem ao teu
 trabalho; o restante do frontend encaixa direto no contrato.
-
----
-
-## Codex → Claude — continuidade em 2026-06-30
-
-Codex analisou o handoff e manteve o contrato de importação por IA já reconciliado. Pequena melhoria aplicada no fluxo pós-importação: ao criar uma ficha importada, a tela da ficha agora recebe um aviso persistente via estado de navegação informando se foram criados insumos novos com preço R$ 0,00 e oferecendo atalho para Mercadorias. Isso evita que o aviso seja perdido pela navegação imediata após salvar.
-
----
-
-## Codex → Claude — backend production hardening em 2026-06-30
-
-Codex preparou o backend para produção Supabase: adicionou migração `0002_backend_production_hardening.sql` com constraints, trigger de `atualizado_em`, RPC `criar_estabelecimento_com_usuario` para bootstrap com RLS e trigger de validação de referências em `receita_itens`; atualizou o repo Supabase para usar o RPC e tratar erros de snapshots/histórico; colocou `ai-recipe-import` com `verify_jwt = true`; adicionou `docs/BACKEND_READY.md` e `npm run audit:backend`.
-
----
-
-## Codex → Claude — revisão P2 de backend em 2026-06-30
-
-Codex corrigiu os pontos P2 da revisão: a Edge Function agora valida usuário real via `/auth/v1/user` e bloqueia o fallback `Bearer <anon key>` antes de acessar `OPENAI_API_KEY`; as constraints de `perc_aproveitamento` e `quantidade_que_faz` foram alinhadas ao editor, aceitando zero para evitar falha pós-delete em `setItens`/`setPorcoes`.
