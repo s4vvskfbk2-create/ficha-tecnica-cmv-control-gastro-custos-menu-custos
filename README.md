@@ -50,7 +50,11 @@ Seletor global de unidade (seed: **Nobre Bistrô**, **Úrica Maison**,
 
 ### Dashboard
 - Indicadores do estabelecimento (nº de insumos/fichas, CMV médio, alertas de
-  CMV alto) e **engenharia de cardápio** (CMV por item, ordenado).
+  CMV alto), alertas de insumos sem preço e **engenharia de cardápio** (CMV por item, ordenado).
+
+### Relatórios & Prime Cost (fase 2 incremental)
+- Simulador gerencial sem alterar dados: faturamento projetado, CMV teórico,
+  CMO/mão de obra, despesas, impostos, Prime Cost e resultado operacional.
 
 ### Export Excel com fórmulas vivas (diferencial)
 O `.xlsx` **não** grava valores congelados — as células contêm fórmulas reais,
@@ -81,9 +85,10 @@ subficha Molho de tomate) salvos no navegador.
 
 ### Conectando ao Supabase
 
-1. Crie um projeto no Supabase e rode a migração em
-   [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql)
-   (tabelas + RLS por estabelecimento via `usuario_estabelecimento`).
+1. Crie um projeto no Supabase e rode as migrações em ordem:
+   [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) e
+   [`supabase/migrations/0002_backend_production_hardening.sql`](supabase/migrations/0002_backend_production_hardening.sql)
+   (tabelas + RLS por estabelecimento, RPC de bootstrap e validações de integridade).
 2. Copie `.env.example` para `.env.local` e preencha:
 
    ```
@@ -101,6 +106,10 @@ subficha Molho de tomate) salvos no navegador.
 | `npm run build`     | Type-check + build de produção     |
 | `npm run preview`   | Pré-visualiza o build              |
 | `npm run typecheck` | Apenas checagem de tipos           |
+| `npm run audit:backend` | Auditoria estática do backend Supabase/IA |
+| `npm run audit:excel` | Confere fórmulas vivas essenciais do export Excel |
+| `npm run test:core` | Checa invariantes críticos de cálculo/unidades/IA sem dependências extras |
+| `npm run check:all` | Executa auditorias, typecheck e build |
 
 ## Estrutura
 
@@ -123,6 +132,7 @@ src/
     FichasPage.tsx
     FichaEditorPage.tsx
     CardapioPage.tsx
+    RelatoriosPage.tsx
   App.tsx          # layout + seletor de estabelecimento + navegação
 supabase/
   migrations/0001_init.sql

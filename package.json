@@ -8,7 +8,11 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "audit:backend": "node scripts/audit-backend.mjs",
+    "audit:excel": "node scripts/audit-excel.mjs",
+    "test:core": "node scripts/test-core.mjs",
+    "check:all": "npm run test:core && npm run audit:backend && npm run audit:excel && npm run typecheck && npm run build"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

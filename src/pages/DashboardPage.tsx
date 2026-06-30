@@ -21,6 +21,7 @@ export default function DashboardPage() {
   const cmvMedio = comPreco.length ? comPreco.reduce((s, x) => s + x.c.cmvPct, 0) / comPreco.length : 0
   const seg = estabelecimento?.segmento ?? 'outro'
   const alertas = comPreco.filter((x) => avaliarCMV(x.c.cmvPct, seg).nivel === 'danger')
+  const semPreco = snapshot.mercadorias.filter((m) => m.embalagem_preco <= 0)
   const faturamentoPotencial = comPreco.reduce((s, x) => s + x.r.preco_venda, 0)
 
   if (loading) return <div className="empty">Carregando…</div>
@@ -46,6 +47,13 @@ export default function DashboardPage() {
           <button className="btn" onClick={() => setNovo((v) => !v)}>+ Estabelecimento</button>
         </div>
       </div>
+
+      {semPreco.length > 0 && (
+        <div className="notice">
+          Existem <strong>{semPreco.length}</strong> mercadoria(s) com preço R$ 0,00. Atualize esses preços para o CMV ficar confiável.
+          {' '}<button className="link" onClick={() => navigate('/mercadorias')}>Ver mercadorias</button>
+        </div>
+      )}
 
       {novo && (
         <form className="card" onSubmit={criar}>

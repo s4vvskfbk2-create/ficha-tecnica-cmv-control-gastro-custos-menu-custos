@@ -9,6 +9,7 @@ import FichasPage from './pages/FichasPage'
 import FichaEditorPage from './pages/FichaEditorPage'
 import ImportarReceitaPage from './pages/ImportarReceitaPage'
 import CardapioPage from './pages/CardapioPage'
+import RelatoriosPage from './pages/RelatoriosPage'
 import './index.css'
 
 const router = createBrowserRouter([
@@ -22,6 +23,7 @@ const router = createBrowserRouter([
       { path: 'fichas/importar', element: <ImportarReceitaPage /> },
       { path: 'fichas/:id', element: <FichaEditorPage /> },
       { path: 'cardapio', element: <CardapioPage /> },
+      { path: 'relatorios', element: <RelatoriosPage /> },
       { path: '*', element: <Navigate to="/" replace /> },
     ],
   },

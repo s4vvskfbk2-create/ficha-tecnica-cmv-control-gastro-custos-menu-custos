@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useStore } from '../lib/store'
 import { uid } from '../lib/db'
 import {
@@ -13,13 +13,15 @@ import {
   formatX,
 } from '../lib/calc'
 import { avaliarCMV } from '../lib/benchmark'
-import { UNIDADES, type CustoExtra, type Porcao, type Receita, type ReceitaItem, type Unidade } from '../lib/types'
+import { UNIDADES, type CustoExtra, type Mercadoria, type Porcao, type Receita, type ReceitaItem, type Unidade } from '../lib/types'
 
 type Vista = 'gerencial' | 'operacional'
 
 export default function FichaEditorPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
+  const importNotice = (location.state as { importNotice?: string } | null)?.importNotice
   const store = useStore()
   const { snapshot, estabelecimento } = store
   const receita = snapshot.receitas.find((r) => r.id === id)
@@ -172,6 +174,10 @@ export default function FichaEditorPage() {
   }
 
   const f = calc!.ficha
+  const mercadoriasSemPreco = itens
+    .filter((it) => it.tipo === 'mercadoria')
+    .map((it) => snapshot.mercadorias.find((m) => m.id === it.ref_id))
+    .filter((m): m is Mercadoria => Boolean(m) && (m?.embalagem_preco ?? 0) <= 0)
 
   return (
     <>
@@ -198,6 +204,20 @@ export default function FichaEditorPage() {
           </button>
         </div>
       </div>
+
+      {importNotice && (
+        <div className="notice" role="status">
+          {importNotice}{' '}
+          <button className="link" onClick={() => navigate('/mercadorias')}>Atualizar preços em Mercadorias</button>
+        </div>
+      )}
+
+      {mercadoriasSemPreco.length > 0 && (
+        <div className="msg-erro" role="alert">
+          Esta ficha usa {mercadoriasSemPreco.length} mercadoria(s) com preço R$ 0,00: {mercadoriasSemPreco.map((m) => m.nome).join(', ')}.
+          {' '}<button className="link" onClick={() => navigate('/mercadorias')}>Atualizar preços</button>
+        </div>
+      )}
 
       <div className="editor-grid">
         <div>

@@ -210,11 +210,11 @@ export default function ImportarReceitaPage() {
       )
 
       await refresh()
-      if (novos.length) {
-        setNovosInsumos(novos)
-        // breve confirmação antes de navegar, para o usuário ver o aviso
-      }
-      navigate(`/fichas/${receita.id}`)
+      const importNotice = novos.length
+        ? `Ficha importada criada. Criamos ${novos.length} insumo(s) novo(s) com preço R$ 0,00: ${novos.join(', ')}. Atualize os preços para calcular o CMV corretamente.`
+        : 'Ficha importada criada com sucesso.'
+      setNovosInsumos(novos)
+      navigate(`/fichas/${receita.id}`, { state: { importNotice } })
     } catch (e) {
       setErro(`Não consegui salvar a ficha: ${(e as Error)?.message ?? 'erro desconhecido'}.`)
     } finally {

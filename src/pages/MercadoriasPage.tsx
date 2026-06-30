@@ -186,7 +186,8 @@ export default function MercadoriasPage() {
               {filtradas.map((m) => (
                 <tr key={m.id}>
                   <td>
-                    <strong>{m.nome}</strong>
+                    <strong>{m.nome}</strong>{' '}
+                    {m.embalagem_preco <= 0 && <span className="badge danger">sem preço</span>}
                     {m.fornecedor && <div className="muted-sm">{m.fornecedor}</div>}
                   </td>
                   <td>{m.categoria || '—'}</td>

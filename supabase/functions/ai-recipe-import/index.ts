@@ -86,6 +86,45 @@ function jsonResponse(body: unknown, status = 200): Response {
   })
 }
 
+
+async function requireAuthenticatedUser(req: Request): Promise<Response | null> {
+  const authHeader = req.headers.get('authorization') || ''
+  const token = authHeader.match(/^Bearer\s+(.+)$/i)?.[1]?.trim()
+  if (!token) {
+    return jsonResponse({ error: 'Faça login para importar receitas com IA.', code: 'auth_required' }, 401)
+  }
+
+  // supabase-js pode enviar a anon key como Bearer quando não há sessão. A anon
+  // key é um JWT válido do projeto, mas não representa usuário autenticado.
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY')
+  if (anonKey && token === anonKey) {
+    return jsonResponse({ error: 'Faça login para importar receitas com IA.', code: 'auth_required' }, 401)
+  }
+
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')
+  if (!supabaseUrl) {
+    return jsonResponse({ error: 'SUPABASE_URL não configurada na Edge Function.', code: 'missing_supabase_url' }, 500)
+  }
+
+  const userResponse = await fetch(`${supabaseUrl}/auth/v1/user`, {
+    headers: {
+      apikey: anonKey || token,
+      authorization: `Bearer ${token}`,
+    },
+  }).catch(() => null)
+
+  if (!userResponse || !userResponse.ok) {
+    return jsonResponse({ error: 'Sessão inválida ou expirada. Faça login novamente.', code: 'invalid_session' }, 401)
+  }
+
+  const user = await userResponse.json().catch(() => null) as { id?: unknown } | null
+  if (!user || typeof user.id !== 'string' || !user.id) {
+    return jsonResponse({ error: 'Sessão inválida ou expirada. Faça login novamente.', code: 'invalid_session' }, 401)
+  }
+
+  return null
+}
+
 function getClientKey(req: Request): string {
   const forwardedFor = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
   return forwardedFor || req.headers.get('cf-connecting-ip') || req.headers.get('x-real-ip') || 'unknown-client'
@@ -213,6 +252,9 @@ function extractOutputText(payload: Record<string, unknown>): string | undefined
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return jsonResponse({ error: 'Método não permitido. Use POST.', code: 'method_not_allowed' }, 405)
+
+  const authResponse = await requireAuthenticatedUser(req)
+  if (authResponse) return authResponse
 
   const rateLimitResponse = checkRateLimit(req)
   if (rateLimitResponse) return rateLimitResponse

@@ -79,12 +79,11 @@ Os tipos vivem em [`src/lib/aiRecipe.ts`](../src/lib/aiRecipe.ts).
 
 1. **Edge Function** `ai-recipe-import` e `AiRecipeDraft` confirmados — coincidem
    exatamente com este doc e com `src/lib/aiRecipe.ts`.
-2. **Autenticação**: `verify_jwt = false` no MVP (anon, ver `supabase/config.toml`);
-   mudar para `true` em produção SaaS e exigir sessão do usuário.
+2. **Autenticação**: `verify_jwt = true` em `supabase/config.toml` e validação explícita de sessão dentro da Edge Function; a produção exige usuário real, não apenas a anon key. Para demos locais sem backend, use o fallback local sem IA.
 3. **Limites**: texto 20.000 chars · imagem 4 MB (JPEG/PNG/WEBP) · 12 req/min por
    IP · modelo `gpt-4o-mini` (`OPENAI_RECIPE_MODEL` para trocar).
 4. **Erros**: a função retorna `{ error, code }` — códigos em
-   `supabase/functions/ai-recipe-import/README.md`. O frontend exibe `error`.
+   `supabase/functions/ai-recipe-import/README.md`, incluindo `auth_required` e `invalid_session` para chamadas sem usuário. O frontend exibe `error`.
 5. **Multi-tenant**: a IA não grava nada sozinha. Ao converter o draft em ficha,
    se a base multi-estabelecimento estiver ativa, a criação de ficha/mercadoria
    deve enviar `estabelecimento_id` (o frontend já cria via store escopada por
