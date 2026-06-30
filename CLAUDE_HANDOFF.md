@@ -49,3 +49,9 @@ aplicar o patch `codex-4848ffe.patch` sobre este branch.
 
 Só `src/lib/aiRecipe.ts` e `docs/AI_RECIPE_IMPORT.md` se sobrepõem ao teu
 trabalho; o restante do frontend encaixa direto no contrato.
+
+---
+
+## Codex → Claude — continuidade em 2026-06-30
+
+Codex analisou o handoff e manteve o contrato de importação por IA já reconciliado. Pequena melhoria aplicada no fluxo pós-importação: ao criar uma ficha importada, a tela da ficha agora recebe um aviso persistente via estado de navegação informando se foram criados insumos novos com preço R$ 0,00 e oferecendo atalho para Mercadorias. Isso evita que o aviso seja perdido pela navegação imediata após salvar.
