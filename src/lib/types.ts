@@ -1,56 +1,152 @@
-// Modelos de domínio do MVP: Mercadorias, Fichas Técnicas e seus itens.
+// Modelos de domínio do app de Ficha Técnica & CMV.
+// Multi-estabelecimento, composição recursiva (subfichas), % de aproveitamento,
+// porções reutilizáveis e indicadores gerenciais (CMV, margem, markup).
 
-/** Unidade base usada nas receitas (e no cálculo de custo unitário). */
-export type Unidade = 'g' | 'kg' | 'ml' | 'L' | 'un'
+/** Unidade base usada em mercadorias, itens e rendimento. */
+export type Unidade = 'g' | 'kg' | 'ml' | 'L' | 'un' | 'cx' | 'pct'
+
+export const UNIDADES: Unidade[] = ['g', 'kg', 'ml', 'L', 'un', 'cx', 'pct']
+
+/** Segmentos usados para benchmark de CMV/margem por estabelecimento. */
+export type Segmento =
+  | 'bistro'
+  | 'a_la_carte'
+  | 'bar'
+  | 'pizzaria'
+  | 'cafe'
+  | 'confeitaria'
+  | 'fast_food'
+  | 'japones'
+  | 'outro'
+
+/** Estabelecimento (unidade) — todo dado é escopado por ele. */
+export interface Estabelecimento {
+  id: string
+  nome: string
+  segmento: Segmento
+  created_at: string
+}
+
+export type EstabelecimentoInput = Omit<Estabelecimento, 'id' | 'created_at'>
 
 /**
  * Mercadoria = insumo / matéria-prima comprada.
- *
- * O custo unitário é derivado do preço da embalagem dividido pela quantidade
- * da embalagem, na unidade base. Ex.: pacote de 1000 g por R$ 25,00 → R$ 0,025/g.
+ * Custo unitário é derivado: preço da embalagem ÷ quantidade da embalagem.
  */
 export interface Mercadoria {
   id: string
+  estabelecimento_id: string
   nome: string
   categoria: string | null
   unidade: Unidade
-  /** Quantidade contida na embalagem, na unidade base. Ex.: 1000 (g). */
+  /** Quantidade contida na embalagem, na unidade base. */
   embalagem_qtd: number
-  /** Preço pago pela embalagem inteira. Ex.: 25.00 (R$). */
+  /** Preço pago pela embalagem inteira (R$). */
   embalagem_preco: number
   fornecedor: string | null
+  /** Data da última atualização de preço (YYYY-MM-DD). */
+  atualizado_em: string
   created_at: string
 }
 
 export type MercadoriaInput = Omit<Mercadoria, 'id' | 'created_at'>
 
-/** Linha de uma ficha técnica: uma mercadoria e a quantidade utilizada na receita. */
-export interface FichaItem {
+/** Histórico de preços de uma mercadoria (rastreabilidade de compras). */
+export interface PrecoHist {
   id: string
-  ficha_id: string
   mercadoria_id: string
-  /** Quantidade usada na receita, na unidade base da mercadoria. */
-  quantidade: number
+  preco: number
+  qtd: number
+  unidade: Unidade
+  data: string
+  fornecedor: string | null
 }
 
-export type FichaItemInput = Omit<FichaItem, 'id'>
+export type PrecoHistInput = Omit<PrecoHist, 'id'>
 
-/** Ficha técnica = receita / prato com seu rendimento e preço de venda. */
-export interface FichaTecnica {
+/** Tipo de receita: item de cardápio (venda) ou produção (subficha/processado). */
+export type ReceitaTipo = 'cardapio' | 'producao'
+
+/** Ficha técnica / receita. */
+export interface Receita {
   id: string
+  estabelecimento_id: string
   nome: string
   categoria: string | null
-  /** Rendimento: número de porções produzidas pela receita. */
-  rendimento: number
+  tipo: ReceitaTipo
+  /** Rendimento: quanto a receita inteira produz (valor + unidade). */
+  rendimento_valor: number
+  rendimento_unidade: Unidade
+  /** Peso/qtd final após o preparo (pós-cocção). 0 = usar rendimento_valor. */
+  rendimento_final_peso: number
+  tempo_preparo_min: number
+  validade_congelado_dias: number
+  validade_refrigerado_dias: number
+  validade_ambiente_dias: number
   /** Preço de venda por porção (R$). */
   preco_venda: number
+  /** Meta de CMV (decimal, ex.: 0.30) para o simulador de preço. */
+  cmv_meta: number
   modo_preparo: string | null
+  observacoes: string | null
   created_at: string
+  atualizado_em: string
 }
 
-export type FichaTecnicaInput = Omit<FichaTecnica, 'id' | 'created_at'>
+export type ReceitaInput = Omit<Receita, 'id' | 'created_at' | 'atualizado_em'>
 
-/** Ficha técnica com seus itens carregados (para telas e exports). */
-export interface FichaTecnicaCompleta extends FichaTecnica {
-  itens: FichaItem[]
+/** Tipo de item de uma ficha: insumo (mercadoria) ou outra receita (subficha). */
+export type ItemTipo = 'mercadoria' | 'receita'
+
+/** Item / linha de ingrediente de uma ficha técnica. */
+export interface ReceitaItem {
+  id: string
+  receita_id: string
+  ordem: number
+  /** Cabeçalho de seção opcional (ex.: "Massa", "Recheio"). */
+  titulo_secao: string | null
+  tipo: ItemTipo
+  /** id da mercadoria ou da receita referenciada. */
+  ref_id: string
+  /** Quantidade líquida usada na receita. */
+  qtd_liquida: number
+  unidade: Unidade
+  /** % de aproveitamento (decimal, ex.: 0.85). qtd_bruta = liquida / aprov. */
+  perc_aproveitamento: number
+  /** Medida caseira para a ficha operacional (ex.: "2 xícaras"). */
+  medida_caseira: string | null
+}
+
+export type ReceitaItemInput = Omit<ReceitaItem, 'id'>
+
+/** Custo extra da receita (embalagem da produção, gás, etc.). */
+export interface CustoExtra {
+  id: string
+  receita_id: string
+  descricao: string
+  valor: number
+}
+
+export type CustoExtraInput = Omit<CustoExtra, 'id'>
+
+/** Porção reutilizável: transforma o rendimento em unidades de uso/venda. */
+export interface Porcao {
+  id: string
+  receita_id: string
+  nome: string
+  unidade: Unidade
+  /** Quantas porções/unidades a receita inteira faz (ex.: Fatia = 12). */
+  quantidade_que_faz: number
+}
+
+export type PorcaoInput = Omit<Porcao, 'id'>
+
+/** Snapshot completo de um estabelecimento (carregado em memória pela store). */
+export interface Snapshot {
+  mercadorias: Mercadoria[]
+  precoHist: PrecoHist[]
+  receitas: Receita[]
+  itens: ReceitaItem[]
+  custosExtras: CustoExtra[]
+  porcoes: Porcao[]
 }

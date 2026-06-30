@@ -1,20 +1,45 @@
 import { NavLink, Outlet } from 'react-router-dom'
+import { useStore } from './lib/store'
 import { supabaseConfigured } from './lib/supabase'
+import { labelSegmento } from './lib/benchmark'
+
+const tabs = [
+  { to: '/', label: 'Dashboard', end: true },
+  { to: '/mercadorias', label: 'Mercadorias' },
+  { to: '/fichas', label: 'Fichas Técnicas' },
+  { to: '/cardapio', label: 'Cardápio' },
+]
 
 export default function App() {
+  const { estabelecimentos, estabelecimento, selecionarEstabelecimento } = useStore()
+
   return (
     <div className="app-shell">
       <header className="topbar">
         <span className="brand">🍽️ Ficha Técnica &amp; CMV</span>
         <nav>
-          <NavLink to="/mercadorias" className={({ isActive }) => (isActive ? 'active' : '')}>
-            Mercadorias
-          </NavLink>
-          <NavLink to="/fichas" className={({ isActive }) => (isActive ? 'active' : '')}>
-            Fichas Técnicas
-          </NavLink>
+          {tabs.map((t) => (
+            <NavLink key={t.to} to={t.to} end={t.end} className={({ isActive }) => (isActive ? 'active' : '')}>
+              {t.label}
+            </NavLink>
+          ))}
         </nav>
         <span className="spacer" />
+        {estabelecimento && (
+          <label className="estab-select">
+            <select
+              value={estabelecimento.id}
+              onChange={(e) => selecionarEstabelecimento(e.target.value)}
+              title="Estabelecimento ativo"
+            >
+              {estabelecimentos.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.nome} · {labelSegmento(e.segmento)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <span className="mode" title={supabaseConfigured ? 'Conectado ao Supabase' : 'Dados salvos no navegador'}>
           {supabaseConfigured ? 'Supabase' : 'Modo local'}
         </span>

@@ -1,23 +1,26 @@
-// Export Excel com FÓRMULAS VIVAS: as células contêm fórmulas reais (não valores
-// pré-calculados), de modo que o usuário pode editar preços/quantidades direto
-// no Excel e todos os custos, CMV% e margem recalculam automaticamente.
+// Export Excel com FÓRMULAS VIVAS (requisito central do projeto).
+// As células contêm fórmulas reais — não valores congelados — de modo que ao
+// editar um preço ou quantidade no próprio Excel, custo, CMV%, margem e markup
+// recalculam sozinhos. Estrutura de 3 abas (espelha a nota 02):
+//   1) "Tabela de Preços"   — custo unitário = Preço Pago / Qtd
+//   2) "Ficha Técnica"      — referencia a aba de preços; calcula indicadores
+//   3) "Receita Operacional"— medida caseira + modo de preparo (sem custos)
 
 import ExcelJS from 'exceljs'
-import { custoUnitario } from './calc'
+import { custoUnitario, qtdBruta, rendimentoEfetivo, type CalcContext } from './calc'
+import { converter } from './units'
 import { downloadBlob, slug } from './download'
-import type { FichaItem, FichaTecnica, Mercadoria } from './types'
+import type { CustoExtra, Mercadoria, Porcao, Receita } from './types'
 
-const BRL = 'R$ #,##0.00'
+const BRL = 'R$ #,##0.0000'
+const BRL2 = 'R$ #,##0.00'
 const PCT = '0.0%'
-const HEADER_FILL: ExcelJS.Fill = {
-  type: 'pattern',
-  pattern: 'solid',
-  fgColor: { argb: 'FF1F2937' },
-}
+const DARK: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F2937' } }
+const SOFT: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } }
 
-function styleHeader(row: ExcelJS.Row): void {
+function header(row: ExcelJS.Row): void {
   row.eachCell((cell) => {
-    cell.fill = HEADER_FILL
+    cell.fill = DARK
     cell.font = { color: { argb: 'FFFFFFFF' }, bold: true }
     cell.alignment = { vertical: 'middle' }
   })
@@ -31,164 +34,310 @@ async function writeAndDownload(wb: ExcelJS.Workbook, filename: string): Promise
   downloadBlob(blob, filename)
 }
 
-/**
- * Monta a planilha "Mercadorias" e devolve um mapa id → linha, para que outras
- * abas possam referenciar o custo unitário de cada mercadoria com fórmula viva.
- */
-function buildMercadoriasSheet(
-  wb: ExcelJS.Workbook,
-  mercadorias: Mercadoria[],
-): Map<string, number> {
-  const ws = wb.addWorksheet('Mercadorias')
+/** Coleta recursivamente as mercadorias usadas por uma receita (e suas subfichas). */
+function coletarMercadorias(
+  receitaId: string,
+  ctx: CalcContext,
+  acc: Map<string, Mercadoria>,
+  vis: Set<string>,
+): void {
+  if (vis.has(receitaId)) return
+  vis.add(receitaId)
+  const itens = ctx.itensPorReceita.get(receitaId) ?? []
+  for (const it of itens) {
+    if (it.tipo === 'mercadoria') {
+      const m = ctx.mercadorias.get(it.ref_id)
+      if (m) acc.set(m.id, m)
+    } else {
+      coletarMercadorias(it.ref_id, ctx, acc, vis)
+    }
+  }
+}
+
+/** Aba "Tabela de Preços" → mapa mercadoriaId → linha (para fórmulas cruzadas). */
+function buildPrecosSheet(wb: ExcelJS.Workbook, mercadorias: Mercadoria[]): Map<string, number> {
+  const ws = wb.addWorksheet('Tabela de Preços')
   ws.columns = [
-    { header: 'Mercadoria', key: 'nome', width: 28 },
-    { header: 'Categoria', key: 'categoria', width: 16 },
-    { header: 'Unidade', key: 'unidade', width: 10 },
-    { header: 'Qtd. Embalagem', key: 'qtd', width: 16 },
-    { header: 'Preço Embalagem', key: 'preco', width: 18 },
+    { header: 'Ingrediente', key: 'nome', width: 28 },
+    { header: 'Embalagem', key: 'emb', width: 16 },
+    { header: 'Preço Pago', key: 'preco', width: 14 },
+    { header: 'Qtd', key: 'qtd', width: 10 },
+    { header: 'Unidade', key: 'un', width: 10 },
     { header: 'Custo Unitário', key: 'custo', width: 16 },
+    { header: 'Atualizado', key: 'data', width: 14 },
+    { header: 'Fornecedor', key: 'forn', width: 20 },
   ]
-  styleHeader(ws.getRow(1))
+  header(ws.getRow(1))
 
   const rowOf = new Map<string, number>()
   mercadorias.forEach((m, i) => {
     const r = i + 2
     ws.getCell(r, 1).value = m.nome
-    ws.getCell(r, 2).value = m.categoria ?? ''
-    ws.getCell(r, 3).value = m.unidade
+    ws.getCell(r, 2).value = `${m.embalagem_qtd} ${m.unidade}`
+    ws.getCell(r, 3).value = m.embalagem_preco
+    ws.getCell(r, 3).numFmt = BRL2
     ws.getCell(r, 4).value = m.embalagem_qtd
-    ws.getCell(r, 5).value = m.embalagem_preco
-    ws.getCell(r, 5).numFmt = BRL
-    // FÓRMULA VIVA: custo unitário = preço da embalagem / quantidade.
-    ws.getCell(r, 6).value = { formula: `IF(D${r}=0,0,E${r}/D${r})` }
+    ws.getCell(r, 5).value = m.unidade
+    // FÓRMULA VIVA: custo unitário = preço pago / quantidade.
+    ws.getCell(r, 6).value = { formula: `IF(D${r}=0,0,C${r}/D${r})` }
     ws.getCell(r, 6).numFmt = BRL
+    ws.getCell(r, 7).value = m.atualizado_em
+    ws.getCell(r, 8).value = m.fornecedor ?? ''
     rowOf.set(m.id, r)
   })
-
   return rowOf
 }
 
-/** Exporta a lista completa de mercadorias com custo unitário como fórmula viva. */
-export async function exportMercadoriasExcel(mercadorias: Mercadoria[]): Promise<void> {
+/** Exporta a lista completa de mercadorias (custo unitário como fórmula viva). */
+export async function exportMercadoriasExcel(mercadorias: Mercadoria[], titulo = 'Mercadorias'): Promise<void> {
   const wb = new ExcelJS.Workbook()
   wb.creator = 'Ficha Técnica & CMV'
   wb.created = new Date()
-  buildMercadoriasSheet(wb, mercadorias)
-  await writeAndDownload(wb, `mercadorias-${slug(new Date().toISOString().slice(0, 10))}.xlsx`)
+  buildPrecosSheet(wb, mercadorias)
+  await writeAndDownload(wb, `${slug(titulo)}-${new Date().toISOString().slice(0, 10)}.xlsx`)
+}
+
+function label(ws: ExcelJS.Worksheet, row: number, texto: string, valor: ExcelJS.CellValue, fmt?: string, bold = false) {
+  ws.getCell(row, 6).value = texto
+  ws.getCell(row, 6).font = { bold }
+  ws.getCell(row, 6).alignment = { horizontal: 'right' }
+  const c = ws.getCell(row, 7)
+  c.value = valor
+  if (fmt) c.numFmt = fmt
+  c.font = { bold }
 }
 
 /**
- * Exporta uma ficha técnica completa. A aba "Mercadorias" carrega todos os
- * insumos usados; a aba da ficha referencia o custo unitário de cada insumo
- * (Mercadorias!F{linha}) e calcula custo, CMV% e margem com fórmulas vivas.
+ * Exporta uma ficha técnica completa nas 3 abas com fórmulas vivas.
  */
 export async function exportFichaExcel(
-  ficha: FichaTecnica,
-  itens: FichaItem[],
-  mercadorias: Map<string, Mercadoria>,
+  receita: Receita,
+  ctx: CalcContext,
+  extras: CustoExtra[],
+  porcoes: Porcao[],
 ): Promise<void> {
   const wb = new ExcelJS.Workbook()
   wb.creator = 'Ficha Técnica & CMV'
   wb.created = new Date()
 
-  const usadas = itens
-    .map((i) => mercadorias.get(i.mercadoria_id))
-    .filter((m): m is Mercadoria => Boolean(m))
-  const rowOf = buildMercadoriasSheet(wb, usadas)
+  // --- Aba 1: Tabela de Preços (todas as mercadorias usadas, recursivo) ---
+  const usadas = new Map<string, Mercadoria>()
+  coletarMercadorias(receita.id, ctx, usadas, new Set())
+  const mercList = [...usadas.values()].sort((a, b) => a.nome.localeCompare(b.nome))
+  const rowOf = buildPrecosSheet(wb, mercList)
 
+  // --- Aba 2: Ficha Técnica (gerencial, com fórmulas) ---
   const ws = wb.addWorksheet('Ficha Técnica')
   ws.columns = [
-    { width: 30 },
-    { width: 14 },
-    { width: 14 },
-    { width: 16 },
-    { width: 16 },
+    { width: 30 }, { width: 12 }, { width: 14 }, { width: 10 },
+    { width: 12 }, { width: 16 }, { width: 16 }, { width: 10 },
   ]
+  ws.mergeCells('A1:H1')
+  const tit = ws.getCell('A1')
+  tit.value = `Ficha Técnica — ${receita.nome}`
+  tit.font = { size: 16, bold: true }
+  ws.getCell('A2').value = `Categoria: ${receita.categoria ?? '—'}    Tipo: ${receita.tipo === 'cardapio' ? 'Cardápio' : 'Produção'}`
+  ws.getCell('A2').font = { color: { argb: 'FF64748B' } }
 
-  // Cabeçalho da ficha.
-  ws.mergeCells('A1:E1')
-  const titulo = ws.getCell('A1')
-  titulo.value = ficha.nome
-  titulo.font = { size: 16, bold: true }
+  const headRow = 4
+  const headers = ['Ingrediente', 'Unidade', 'Qtd. Líquida', 'Aprov.', 'Qtd. Bruta', 'Custo Unit.', 'Custo Total', 'Custo %']
+  headers.forEach((h, i) => (ws.getCell(headRow, i + 1).value = h))
+  header(ws.getRow(headRow))
 
-  ws.getCell('A2').value = 'Categoria:'
-  ws.getCell('B2').value = ficha.categoria ?? '—'
-  ws.getCell('A3').value = 'Rendimento (porções):'
-  const rendimentoCell = ws.getCell('B3')
-  rendimentoCell.value = ficha.rendimento
+  const itens = ctx.itensPorReceita.get(receita.id) ?? []
+  const firstRow = headRow + 1
+  let lastRow = firstRow - 1
 
-  // Tabela de itens.
-  const headerRow = 5
-  const headers = ['Mercadoria', 'Unidade', 'Quantidade', 'Custo Unitário', 'Custo']
-  headers.forEach((h, i) => (ws.getCell(headerRow, i + 1).value = h))
-  styleHeader(ws.getRow(headerRow))
-
-  const firstItemRow = headerRow + 1
   itens.forEach((item, i) => {
-    const r = firstItemRow + i
-    const m = mercadorias.get(item.mercadoria_id)
-    const mercRow = rowOf.get(item.mercadoria_id)
-    ws.getCell(r, 1).value = m?.nome ?? '(removida)'
-    ws.getCell(r, 2).value = m?.unidade ?? ''
-    ws.getCell(r, 3).value = item.quantidade
-    // FÓRMULA VIVA: referencia o custo unitário na aba Mercadorias.
-    ws.getCell(r, 4).value = mercRow ? { formula: `Mercadorias!F${mercRow}` } : custoUnitario(m!)
-    ws.getCell(r, 4).numFmt = BRL
-    // FÓRMULA VIVA: custo = quantidade × custo unitário.
-    ws.getCell(r, 5).value = { formula: `C${r}*D${r}` }
-    ws.getCell(r, 5).numFmt = BRL
+    const r = firstRow + i
+    lastRow = r
+    const isMerc = item.tipo === 'mercadoria'
+    const ref = isMerc ? ctx.mercadorias.get(item.ref_id) : ctx.receitas.get(item.ref_id)
+    const baseUnit = isMerc
+      ? (ref as Mercadoria | undefined)?.unidade ?? item.unidade
+      : (ref as Receita | undefined)?.rendimento_unidade ?? item.unidade
+    // expressa a qtd líquida na unidade base (mercadoria/rendimento) p/ a fórmula bater.
+    const qtdLiqBase = converter(item.qtd_liquida, item.unidade, baseUnit)
+
+    ws.getCell(r, 1).value = (isMerc ? ref?.nome : `↳ ${(ref as Receita | undefined)?.nome ?? '—'} (subficha)`) ?? '(removido)'
+    ws.getCell(r, 2).value = baseUnit
+    ws.getCell(r, 3).value = Number(qtdLiqBase.toFixed(4))
+    ws.getCell(r, 4).value = item.perc_aproveitamento || 1
+    ws.getCell(r, 4).numFmt = PCT
+    // FÓRMULA VIVA: qtd bruta = líquida / aproveitamento.
+    ws.getCell(r, 5).value = { formula: `IF(D${r}=0,C${r},C${r}/D${r})` }
+    ws.getCell(r, 5).numFmt = '#,##0.000'
+    // Custo unitário: mercadoria → referencia a Tabela de Preços (fórmula viva);
+    // subficha → custo calculado por unidade de rendimento (valor).
+    if (isMerc && rowOf.has(item.ref_id)) {
+      ws.getCell(r, 6).value = { formula: `'Tabela de Preços'!F${rowOf.get(item.ref_id)}` }
+    } else if (isMerc && ref) {
+      ws.getCell(r, 6).value = custoUnitario(ref as Mercadoria)
+    } else {
+      // subficha: custo por unidade de rendimento
+      const sub = ref as Receita | undefined
+      const custoSub = sub ? subfichaCustoUnit(sub, ctx) : 0
+      ws.getCell(r, 6).value = Number(custoSub.toFixed(6))
+    }
+    ws.getCell(r, 6).numFmt = BRL
+    // FÓRMULA VIVA: custo total = qtd bruta × custo unitário.
+    ws.getCell(r, 7).value = { formula: `E${r}*F${r}` }
+    ws.getCell(r, 7).numFmt = BRL2
   })
 
-  const lastItemRow = firstItemRow + Math.max(itens.length, 1) - 1
+  const hasItens = itens.length > 0
+  const mercTotalRow = lastRow + 1
+  ws.getCell(mercTotalRow, 6).value = 'Custo de Mercadoria:'
+  ws.getCell(mercTotalRow, 6).font = { bold: true }
+  ws.getCell(mercTotalRow, 6).alignment = { horizontal: 'right' }
+  const mercTotalCell = ws.getCell(mercTotalRow, 7)
+  mercTotalCell.value = hasItens ? { formula: `SUM(G${firstRow}:G${lastRow})` } : 0
+  mercTotalCell.numFmt = BRL2
+  mercTotalCell.font = { bold: true }
 
-  // Totais e indicadores — todos com fórmulas vivas.
-  const totalRow = lastItemRow + 1
-  ws.getCell(totalRow, 4).value = 'Custo Total:'
-  ws.getCell(totalRow, 4).font = { bold: true }
-  const custoTotalCell = ws.getCell(totalRow, 5)
-  custoTotalCell.value = itens.length
-    ? { formula: `SUM(E${firstItemRow}:E${lastItemRow})` }
-    : 0
-  custoTotalCell.numFmt = BRL
-  custoTotalCell.font = { bold: true }
-
-  const porcaoRow = totalRow + 1
-  ws.getCell(porcaoRow, 4).value = 'Custo por Porção:'
-  const custoPorcaoCell = ws.getCell(porcaoRow, 5)
-  custoPorcaoCell.value = { formula: `IF(B3=0,0,E${totalRow}/B3)` }
-  custoPorcaoCell.numFmt = BRL
-
-  const vendaRow = porcaoRow + 1
-  ws.getCell(vendaRow, 4).value = 'Preço de Venda:'
-  const precoVendaCell = ws.getCell(vendaRow, 5)
-  precoVendaCell.value = ficha.preco_venda
-  precoVendaCell.numFmt = BRL
-
-  const cmvRow = vendaRow + 1
-  ws.getCell(cmvRow, 4).value = 'CMV %:'
-  ws.getCell(cmvRow, 4).font = { bold: true }
-  const cmvCell = ws.getCell(cmvRow, 5)
-  // FÓRMULA VIVA: CMV% = custo por porção / preço de venda.
-  cmvCell.value = { formula: `IF(E${vendaRow}=0,0,E${porcaoRow}/E${vendaRow})` }
-  cmvCell.numFmt = PCT
-  cmvCell.font = { bold: true }
-
-  const margemRow = cmvRow + 1
-  ws.getCell(margemRow, 4).value = 'Margem (R$):'
-  const margemCell = ws.getCell(margemRow, 5)
-  // FÓRMULA VIVA: margem = preço de venda − custo por porção.
-  margemCell.value = { formula: `E${vendaRow}-E${porcaoRow}` }
-  margemCell.numFmt = BRL
-
-  if (ficha.modo_preparo) {
-    const prepRow = margemRow + 2
-    ws.getCell(prepRow, 1).value = 'Modo de preparo:'
-    ws.getCell(prepRow, 1).font = { bold: true }
-    ws.mergeCells(prepRow + 1, 1, prepRow + 1, 5)
-    const prep = ws.getCell(prepRow + 1, 1)
-    prep.value = ficha.modo_preparo
-    prep.alignment = { wrapText: true, vertical: 'top' }
+  // Custo % por item (referencia o total de mercadoria).
+  if (hasItens) {
+    for (let r = firstRow; r <= lastRow; r++) {
+      ws.getCell(r, 8).value = { formula: `IF($G$${mercTotalRow}=0,0,G${r}/$G$${mercTotalRow})` }
+      ws.getCell(r, 8).numFmt = PCT
+    }
   }
 
-  await writeAndDownload(wb, `ficha-${slug(ficha.nome)}.xlsx`)
+  // Custos extras
+  let row = mercTotalRow + 2
+  ws.getCell(row, 1).value = 'Custos extras'
+  ws.getCell(row, 1).font = { bold: true }
+  row++
+  const extraFirst = row
+  extras.forEach((ex) => {
+    ws.getCell(row, 1).value = ex.descricao
+    ws.getCell(row, 7).value = ex.valor
+    ws.getCell(row, 7).numFmt = BRL2
+    row++
+  })
+  const extraLast = row - 1
+  const extrasTotalRow = row
+  label(
+    ws,
+    extrasTotalRow,
+    'Custos Extras:',
+    extras.length ? { formula: `SUM(G${extraFirst}:G${extraLast})` } : 0,
+    BRL2,
+    true,
+  )
+
+  // Indicadores
+  const totalRow = extrasTotalRow + 1
+  label(ws, totalRow, 'CUSTO TOTAL:', { formula: `G${mercTotalRow}+G${extrasTotalRow}` }, BRL2, true)
+  ws.getRow(totalRow).eachCell((c) => (c.fill = SOFT))
+
+  const rendRow = totalRow + 1
+  label(ws, rendRow, `Rendimento (${receita.rendimento_unidade}):`, receita.rendimento_valor)
+
+  const porcaoRow = rendRow + 1
+  label(ws, porcaoRow, 'Custo por Porção:', { formula: `IF(G${rendRow}=0,0,G${totalRow}/G${rendRow})` }, BRL2, true)
+
+  const precoRow = porcaoRow + 1
+  label(ws, precoRow, 'Preço de Venda:', receita.preco_venda, BRL2)
+
+  const cmvRow = precoRow + 1
+  // FÓRMULA VIVA: CMV% = custo por porção / preço de venda.
+  label(ws, cmvRow, 'CMV %:', { formula: `IF(G${precoRow}=0,0,G${porcaoRow}/G${precoRow})` }, PCT, true)
+
+  const margemRsRow = cmvRow + 1
+  label(ws, margemRsRow, 'Margem (R$):', { formula: `G${precoRow}-G${porcaoRow}` }, BRL2)
+
+  const margemPctRow = margemRsRow + 1
+  label(ws, margemPctRow, 'Margem %:', { formula: `IF(G${precoRow}=0,0,G${margemRsRow}/G${precoRow})` }, PCT)
+
+  const markupRow = margemPctRow + 1
+  label(ws, markupRow, 'Markup:', { formula: `IF(G${porcaoRow}=0,0,G${precoRow}/G${porcaoRow})` }, '0.00"×"')
+
+  const metaRow = markupRow + 1
+  label(ws, metaRow, 'Meta de CMV:', receita.cmv_meta || 0.3, PCT)
+  const precoMetaRow = metaRow + 1
+  label(ws, precoMetaRow, 'Preço p/ meta:', { formula: `IF(G${metaRow}=0,0,G${porcaoRow}/G${metaRow})` }, BRL2)
+
+  // --- Aba 3: Receita Operacional (sem custos) ---
+  const op = wb.addWorksheet('Receita Operacional')
+  op.columns = [{ width: 30 }, { width: 24 }, { width: 14 }, { width: 10 }]
+  op.mergeCells('A1:D1')
+  op.getCell('A1').value = `Receita Operacional — ${receita.nome}`
+  op.getCell('A1').font = { size: 16, bold: true }
+  op.getCell('A2').value =
+    `Rendimento: ${receita.rendimento_valor} ${receita.rendimento_unidade}   •   Preparo: ${receita.tempo_preparo_min} min`
+  op.getCell('A2').font = { color: { argb: 'FF64748B' } }
+
+  const opHead = 4
+  ;['Ingrediente', 'Medida caseira', 'Qtd. Líquida', 'Un.'].forEach((h, i) => (op.getCell(opHead, i + 1).value = h))
+  header(op.getRow(opHead))
+  let opRow = opHead + 1
+  let secaoAtual: string | null = null
+  for (const item of itens) {
+    if (item.titulo_secao && item.titulo_secao !== secaoAtual) {
+      secaoAtual = item.titulo_secao
+      op.getCell(opRow, 1).value = secaoAtual
+      op.getCell(opRow, 1).font = { bold: true, italic: true }
+      opRow++
+    }
+    const isMerc = item.tipo === 'mercadoria'
+    const ref = isMerc ? ctx.mercadorias.get(item.ref_id) : ctx.receitas.get(item.ref_id)
+    op.getCell(opRow, 1).value = (isMerc ? ref?.nome : `${(ref as Receita | undefined)?.nome} (subficha)`) ?? '(removido)'
+    op.getCell(opRow, 2).value = item.medida_caseira ?? ''
+    op.getCell(opRow, 3).value = item.qtd_liquida
+    op.getCell(opRow, 4).value = item.unidade
+    opRow++
+  }
+
+  opRow += 1
+  op.getCell(opRow, 1).value = 'Modo de preparo'
+  op.getCell(opRow, 1).font = { bold: true }
+  opRow++
+  if (receita.modo_preparo) {
+    op.mergeCells(opRow, 1, opRow, 4)
+    const cell = op.getCell(opRow, 1)
+    cell.value = receita.modo_preparo
+    cell.alignment = { wrapText: true, vertical: 'top' }
+    op.getRow(opRow).height = 80
+    opRow++
+  }
+  if (receita.observacoes) {
+    opRow++
+    op.getCell(opRow, 1).value = 'Observações'
+    op.getCell(opRow, 1).font = { bold: true }
+    opRow++
+    op.mergeCells(opRow, 1, opRow, 4)
+    op.getCell(opRow, 1).value = receita.observacoes
+    op.getCell(opRow, 1).alignment = { wrapText: true }
+  }
+  // Porções e validade
+  opRow += 2
+  op.getCell(opRow, 1).value = 'Validade (dias): '
+    + `Congelado ${receita.validade_congelado_dias} • Refrigerado ${receita.validade_refrigerado_dias} • Ambiente ${receita.validade_ambiente_dias}`
+  if (porcoes.length) {
+    opRow++
+    op.getCell(opRow, 1).value = 'Porções: ' + porcoes.map((p) => `${p.nome} = ${p.quantidade_que_faz}`).join('  •  ')
+  }
+
+  await writeAndDownload(wb, `ficha-${slug(receita.nome)}.xlsx`)
+}
+
+/** Custo por unidade de rendimento de uma subficha (valor estático p/ o Excel). */
+function subfichaCustoUnit(sub: Receita, ctx: CalcContext): number {
+  // soma custo de mercadoria + extras / rendimento efetivo (1 nível; recursão já
+  // resolvida pelo motor para casos profundos via calcularFicha, mas aqui basta o
+  // custo por unidade direto).
+  const itens = ctx.itensPorReceita.get(sub.id) ?? []
+  let total = 0
+  for (const it of itens) {
+    if (it.tipo === 'mercadoria') {
+      const m = ctx.mercadorias.get(it.ref_id)
+      if (m) total += converter(custoUnitario(m), it.unidade, m.unidade) * qtdBruta(it)
+    } else {
+      const s = ctx.receitas.get(it.ref_id)
+      if (s) total += converter(subfichaCustoUnit(s, ctx), it.unidade, s.rendimento_unidade) * qtdBruta(it)
+    }
+  }
+  const extras = (ctx.extrasPorReceita.get(sub.id) ?? []).reduce((a, e) => a + (Number(e.valor) || 0), 0)
+  return (total + extras) / (rendimentoEfetivo(sub) || 1)
 }
