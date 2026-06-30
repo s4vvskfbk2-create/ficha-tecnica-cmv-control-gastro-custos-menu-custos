@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useStore } from '../lib/store'
 import { uid } from '../lib/db'
 import {
@@ -13,8 +13,6 @@ import {
   formatX,
 } from '../lib/calc'
 import { avaliarCMV } from '../lib/benchmark'
-import { exportFichaExcel } from '../lib/excel'
-import { exportFichaPDF } from '../lib/pdf'
 import { UNIDADES, type CustoExtra, type Porcao, type Receita, type ReceitaItem, type Unidade } from '../lib/types'
 
 type Vista = 'gerencial' | 'operacional'
@@ -22,6 +20,8 @@ type Vista = 'gerencial' | 'operacional'
 export default function FichaEditorPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
+  const importNotice = (location.state as { importNotice?: string } | null)?.importNotice
   const store = useStore()
   const { snapshot, estabelecimento } = store
   const receita = snapshot.receitas.find((r) => r.id === id)
@@ -164,10 +164,12 @@ export default function FichaEditorPage() {
     }
   }
 
-  function exportarExcel() {
-    exportFichaExcel(header!, calc!.ctx, extras, porcoes)
+  async function exportarExcel() {
+    const { exportFichaExcel } = await import('../lib/excel')
+    await exportFichaExcel(header!, calc!.ctx, extras, porcoes)
   }
-  function exportarPDF() {
+  async function exportarPDF() {
+    const { exportFichaPDF } = await import('../lib/pdf')
     exportFichaPDF(header!, calc!.ctx, porcoes, segmento)
   }
 
@@ -198,6 +200,13 @@ export default function FichaEditorPage() {
           </button>
         </div>
       </div>
+
+      {importNotice && (
+        <div className="notice" role="status">
+          {importNotice}{' '}
+          <button className="link" onClick={() => navigate('/mercadorias')}>Atualizar preços em Mercadorias</button>
+        </div>
+      )}
 
       <div className="editor-grid">
         <div>

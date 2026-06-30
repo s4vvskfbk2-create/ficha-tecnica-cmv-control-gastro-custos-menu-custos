@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useStore } from './lib/store'
+import { useAuth } from './lib/auth'
 import { supabaseConfigured } from './lib/supabase'
 import { labelSegmento } from './lib/benchmark'
 
@@ -12,6 +13,7 @@ const tabs = [
 
 export default function App() {
   const { estabelecimentos, estabelecimento, selecionarEstabelecimento } = useStore()
+  const { requiresAuth, user, signOut } = useAuth()
 
   return (
     <div className="app-shell">
@@ -43,6 +45,12 @@ export default function App() {
         <span className="mode" title={supabaseConfigured ? 'Conectado ao Supabase' : 'Dados salvos no navegador'}>
           {supabaseConfigured ? 'Supabase' : 'Modo local'}
         </span>
+        {requiresAuth && user && (
+          <span className="user-box">
+            <span className="user-email" title={user.email}>{user.email}</span>
+            <button className="btn sm" onClick={() => signOut()}>Sair</button>
+          </span>
+        )}
       </header>
       <main className="container">
         <Outlet />
