@@ -79,8 +79,7 @@ Os tipos vivem em [`src/lib/aiRecipe.ts`](../src/lib/aiRecipe.ts).
 
 1. **Edge Function** `ai-recipe-import` e `AiRecipeDraft` confirmados — coincidem
    exatamente com este doc e com `src/lib/aiRecipe.ts`.
-2. **Autenticação**: `verify_jwt = false` no MVP (anon, ver `supabase/config.toml`);
-   mudar para `true` em produção SaaS e exigir sessão do usuário.
+2. **Autenticação**: `verify_jwt = true` em `supabase/config.toml`; a produção exige sessão do usuário. Para demos locais sem backend, use o fallback local sem IA.
 3. **Limites**: texto 20.000 chars · imagem 4 MB (JPEG/PNG/WEBP) · 12 req/min por
    IP · modelo `gpt-4o-mini` (`OPENAI_RECIPE_MODEL` para trocar).
 4. **Erros**: a função retorna `{ error, code }` — códigos em

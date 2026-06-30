@@ -81,9 +81,10 @@ subficha Molho de tomate) salvos no navegador.
 
 ### Conectando ao Supabase
 
-1. Crie um projeto no Supabase e rode a migração em
-   [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql)
-   (tabelas + RLS por estabelecimento via `usuario_estabelecimento`).
+1. Crie um projeto no Supabase e rode as migrações em ordem:
+   [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) e
+   [`supabase/migrations/0002_backend_production_hardening.sql`](supabase/migrations/0002_backend_production_hardening.sql)
+   (tabelas + RLS por estabelecimento, RPC de bootstrap e validações de integridade).
 2. Copie `.env.example` para `.env.local` e preencha:
 
    ```
@@ -101,6 +102,7 @@ subficha Molho de tomate) salvos no navegador.
 | `npm run build`     | Type-check + build de produção     |
 | `npm run preview`   | Pré-visualiza o build              |
 | `npm run typecheck` | Apenas checagem de tipos           |
+| `npm run audit:backend` | Auditoria estática do backend Supabase/IA |
 
 ## Estrutura
 

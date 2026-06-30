@@ -18,12 +18,11 @@ supabase functions deploy ai-recipe-import
 
 ## Auth atual
 
-- **MVP:** aceita anon (`verify_jwt = false` em `supabase/config.toml`) para
-  permitir testes antes do login completo.
-- **Produção SaaS:** mudar para `verify_jwt = true` e exigir usuário logado.
-  Com `supabase.functions.invoke`, a sessão é enviada automaticamente quando
+- **Produção:** exige usuário autenticado (`verify_jwt = true` em `supabase/config.toml`).
+- Com `supabase.functions.invoke`, a sessão é enviada automaticamente quando
   existir usuário autenticado; em `fetch` manual, envie
   `Authorization: Bearer <access_token>`.
+- Para demonstração sem backend/login, use o fallback local de texto no frontend; ele não chama IA.
 
 ## Request
 

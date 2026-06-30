@@ -224,7 +224,9 @@ const supabaseRepo: Repo = {
     return must(data as Estabelecimento[], error)
   },
   async createEstabelecimento(input) {
-    const { data, error } = await sb().from('estabelecimentos').insert(input).select().single()
+    const { data, error } = await sb()
+      .rpc('criar_estabelecimento_com_usuario', { p_nome: input.nome, p_segmento: input.segmento })
+      .single()
     return must(data as Estabelecimento, error)
   },
   async updateEstabelecimento(id, input) {
@@ -243,17 +245,27 @@ const supabaseRepo: Repo = {
     const receitas = (rec.data ?? []) as Receita[]
     const recIds = receitas.map((r) => r.id)
 
+    const readDependent = async <T,>(query: PromiseLike<{ data: unknown[] | null; error: unknown }>): Promise<T[]> => {
+      const { data, error } = await query
+      if (error) throw error
+      return (data ?? []) as T[]
+    }
+
     const precoHist = mercIds.length
-      ? ((await sb().from('mercadoria_preco_hist').select('*').in('mercadoria_id', mercIds)).data as PrecoHist[]) ?? []
+      ? await readDependent<PrecoHist>(
+          sb().from('mercadoria_preco_hist').select('*').in('mercadoria_id', mercIds).order('data', { ascending: false }),
+        )
       : []
     const itens = recIds.length
-      ? ((await sb().from('receita_itens').select('*').in('receita_id', recIds)).data as ReceitaItem[]) ?? []
+      ? await readDependent<ReceitaItem>(
+          sb().from('receita_itens').select('*').in('receita_id', recIds).order('ordem', { ascending: true }),
+        )
       : []
     const custosExtras = recIds.length
-      ? ((await sb().from('receita_custos_extras').select('*').in('receita_id', recIds)).data as CustoExtra[]) ?? []
+      ? await readDependent<CustoExtra>(sb().from('receita_custos_extras').select('*').in('receita_id', recIds))
       : []
     const porcoes = recIds.length
-      ? ((await sb().from('porcoes').select('*').in('receita_id', recIds)).data as Porcao[]) ?? []
+      ? await readDependent<Porcao>(sb().from('porcoes').select('*').in('receita_id', recIds))
       : []
 
     return { mercadorias, precoHist, receitas, itens, custosExtras, porcoes }
@@ -262,7 +274,7 @@ const supabaseRepo: Repo = {
   async createMercadoria(input) {
     const { data, error } = await sb().from('mercadorias').insert(input).select().single()
     const m = must(data as Mercadoria, error)
-    await sb().from('mercadoria_preco_hist').insert({
+    const hist = await sb().from('mercadoria_preco_hist').insert({
       mercadoria_id: m.id,
       preco: m.embalagem_preco,
       qtd: m.embalagem_qtd,
@@ -270,20 +282,32 @@ const supabaseRepo: Repo = {
       data: m.atualizado_em || hoje(),
       fornecedor: m.fornecedor,
     })
+    if (hist.error) throw hist.error
     return m
   },
   async updateMercadoria(id, input) {
-    const { error } = await sb().from('mercadorias').update(input).eq('id', id)
+    const { data: antes, error: readError } = await sb().from('mercadorias').select('*').eq('id', id).single()
+    if (readError) throw readError
+
+    const { data: atualizada, error } = await sb().from('mercadorias').update(input).eq('id', id).select().single()
     if (error) throw error
-    if (input.embalagem_preco !== undefined) {
-      await sb().from('mercadoria_preco_hist').insert({
+
+    const anterior = antes as Mercadoria
+    const atual = atualizada as Mercadoria
+    const mudouPreco = input.embalagem_preco !== undefined && input.embalagem_preco !== anterior.embalagem_preco
+    const mudouQtd = input.embalagem_qtd !== undefined && input.embalagem_qtd !== anterior.embalagem_qtd
+    const mudouUnidade = input.unidade !== undefined && input.unidade !== anterior.unidade
+
+    if (mudouPreco || mudouQtd || mudouUnidade) {
+      const hist = await sb().from('mercadoria_preco_hist').insert({
         mercadoria_id: id,
-        preco: input.embalagem_preco,
-        qtd: input.embalagem_qtd ?? 0,
-        unidade: input.unidade ?? 'g',
+        preco: atual.embalagem_preco,
+        qtd: atual.embalagem_qtd,
+        unidade: atual.unidade,
         data: input.atualizado_em ?? hoje(),
-        fornecedor: input.fornecedor ?? null,
+        fornecedor: atual.fornecedor,
       })
+      if (hist.error) throw hist.error
     }
   },
   async deleteMercadoria(id) {
