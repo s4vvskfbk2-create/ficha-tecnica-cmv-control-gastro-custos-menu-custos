@@ -1,0 +1,4 @@
+[functions.ai-recipe-import]
+# MVP: permite chamada anon via navegador enquanto autenticação/multi-tenant ainda está sendo integrada.
+# Produção SaaS: trocar para true e exigir usuário logado no frontend.
+verify_jwt = false

@@ -75,15 +75,20 @@ Os tipos vivem em [`src/lib/aiRecipe.ts`](../src/lib/aiRecipe.ts).
   unidades do app (`g, kg, ml, L, un, cx, pct`); o usuário pode corrigir na
   revisão.
 
-## Lacunas a confirmar com o Codex (quando a base for mesclada)
+## ✅ Confirmado pelo Codex (commit f71ecea — backend landado)
 
-1. **Nome/assinatura exata** da Edge Function e shape final do `AiRecipeDraft`
-   (este doc assume os campos acima).
-2. **Autenticação**: a função exige JWT de usuário logado? hoje o frontend
-   chama com a sessão atual do client (anon em MVP).
-3. **Limites**: tamanho máximo de imagem, rate limit, custo por chamada.
-4. **Modelo de dados final**: se o Codex usa `org_id`/multi-tenant, o mapeamento
-   de criação de ficha/mercadoria precisa incluir o tenant.
+1. **Edge Function** `ai-recipe-import` e `AiRecipeDraft` confirmados — coincidem
+   exatamente com este doc e com `src/lib/aiRecipe.ts`.
+2. **Autenticação**: `verify_jwt = false` no MVP (anon, ver `supabase/config.toml`);
+   mudar para `true` em produção SaaS e exigir sessão do usuário.
+3. **Limites**: texto 20.000 chars · imagem 4 MB (JPEG/PNG/WEBP) · 12 req/min por
+   IP · modelo `gpt-4o-mini` (`OPENAI_RECIPE_MODEL` para trocar).
+4. **Erros**: a função retorna `{ error, code }` — códigos em
+   `supabase/functions/ai-recipe-import/README.md`. O frontend exibe `error`.
+5. **Multi-tenant**: a IA não grava nada sozinha. Ao converter o draft em ficha,
+   se a base multi-estabelecimento estiver ativa, a criação de ficha/mercadoria
+   deve enviar `estabelecimento_id` (o frontend já cria via store escopada por
+   estabelecimento).
 
 ## Fallback local (sem IA)
 

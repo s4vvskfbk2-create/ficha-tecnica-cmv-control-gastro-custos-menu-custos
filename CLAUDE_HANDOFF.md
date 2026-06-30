@@ -3,6 +3,18 @@
 > Resumo curto deixado pelo Architect (Claude) para o Runner (Codex), conforme
 > a regra #3 do `AGENTS.md`.
 
+## ✅ ATUALIZAÇÃO — backend do Codex integrado (commit f71ecea via patch)
+
+O Codex não conseguiu `git push` (proxy 403) e entregou o trabalho como patch.
+Claude landou a Edge Function `ai-recipe-import` neste repo a partir do patch
+(ver `handoff/README.md`): `supabase/functions/ai-recipe-import/{index.ts,README.md}`,
+`supabase/config.toml`, `src/lib/aiRecipe.ts` alinhado e docs confirmados.
+O contrato bate 100% com o frontend. **Falta só o deploy** (segredo
+`OPENAI_API_KEY` + `supabase functions deploy`), que depende do dono.
+Codex: se conseguir push depois, mande no branch oficial; este landing é a ponte.
+
+---
+
 ## Estado deste branch
 - Repo: `ficha-tecnica-cmv-control-gastro-custos-menu-custos`
 - Branch: `claude/mvp-app-scaffold-vite-muzhyx`

@@ -1,13 +1,10 @@
 // Contrato compartilhado da importação de receita por IA.
 //
-// ⚠️ NOTA DE INTEGRAÇÃO (Claude → Codex):
-// O backend (Edge Function `ai-recipe-import`), os docs `docs/AI_RECIPE_IMPORT.md`
-// e `docs/BACKEND_CONTRACT.md` e o `src/lib/aiRecipe.ts` originais do Codex NÃO
-// estavam presentes neste repositório/branch quando o frontend foi construído.
-// Este arquivo é o **espelho do contrato esperado pelo frontend**, escrito a
-// partir da especificação do handoff. Quando a base do Codex for mesclada,
-// reconcilie ESTES tipos com os tipos oficiais (mantenha o nome do arquivo e da
-// Edge Function). O frontend só depende dos campos abaixo.
+// ✅ RECONCILIADO com o backend do Codex (commit f71ecea, landado via
+// `handoff/codex-f71ecea.patch`). O contrato do frontend e o da Edge Function
+// `ai-recipe-import` coincidem: request `{ texto, imagemBase64, mimeType }` →
+// response `{ draft: AiRecipeDraft }` com os campos abaixo. A Edge Function vive
+// em `supabase/functions/ai-recipe-import/` e é domínio do Codex (ver AGENTS.md).
 
 /** Unidades aceitas pela ficha (string livre vinda da IA é normalizada na UI). */
 export type AiUnidade = string
@@ -50,4 +47,17 @@ export interface AiRecipeImportRequest {
 /** Resposta da Edge Function. Aceita-se `{ draft }` ou o draft diretamente. */
 export interface AiRecipeImportResponse {
   draft: AiRecipeDraft
+}
+
+/** Rascunho vazio (mesmo default do Codex), útil como estado inicial. */
+export const EMPTY_AI_RECIPE_DRAFT: AiRecipeDraft = {
+  nome: 'Receita importada',
+  categoria: null,
+  rendimento_valor: null,
+  rendimento_unidade: null,
+  preco_venda: null,
+  ingredientes: [],
+  modo_preparo: null,
+  avisos: [],
+  confianca: null,
 }

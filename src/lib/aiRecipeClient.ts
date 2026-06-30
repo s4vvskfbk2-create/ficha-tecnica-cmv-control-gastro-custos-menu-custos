@@ -74,7 +74,19 @@ export async function importarReceitaIA(req: AiRecipeImportRequest): Promise<AiR
     throw new ImportError(`Não consegui falar com o servidor de IA. ${(e as Error)?.message ?? ''}`.trim())
   }
   if (error) {
-    throw new ImportError(`O servidor de IA recusou a importação: ${error.message ?? 'erro desconhecido'}.`)
+    // A Edge Function do Codex retorna { error, code } com mensagem amigável em
+    // PT-BR. No supabase-js, o corpo vem em error.context (Response).
+    let msg = error.message ?? 'erro desconhecido'
+    const ctx = (error as { context?: Response }).context
+    if (ctx && typeof ctx.json === 'function') {
+      try {
+        const corpo = await ctx.json()
+        if (corpo?.error) msg = String(corpo.error)
+      } catch {
+        /* mantém msg padrão */
+      }
+    }
+    throw new ImportError(msg)
   }
   return normalizarDraft(data)
 }
