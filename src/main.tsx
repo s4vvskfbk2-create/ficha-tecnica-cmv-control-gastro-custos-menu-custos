@@ -7,6 +7,7 @@ import DashboardPage from './pages/DashboardPage'
 import MercadoriasPage from './pages/MercadoriasPage'
 import FichasPage from './pages/FichasPage'
 import FichaEditorPage from './pages/FichaEditorPage'
+import ImportarReceitaPage from './pages/ImportarReceitaPage'
 import CardapioPage from './pages/CardapioPage'
 import './index.css'
 
@@ -18,6 +19,7 @@ const router = createBrowserRouter([
       { index: true, element: <DashboardPage /> },
       { path: 'mercadorias', element: <MercadoriasPage /> },
       { path: 'fichas', element: <FichasPage /> },
+      { path: 'fichas/importar', element: <ImportarReceitaPage /> },
       { path: 'fichas/:id', element: <FichaEditorPage /> },
       { path: 'cardapio', element: <CardapioPage /> },
       { path: '*', element: <Navigate to="/" replace /> },

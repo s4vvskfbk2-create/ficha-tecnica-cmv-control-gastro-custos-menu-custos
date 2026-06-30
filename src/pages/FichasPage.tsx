@@ -60,6 +60,7 @@ export default function FichasPage() {
               </button>
             ))}
           </div>
+          <button className="btn" onClick={() => navigate('/fichas/importar')}>📷 Importar receita</button>
           <button className="btn primary" onClick={() => setNovo((v) => !v)}>+ Nova ficha</button>
         </div>
       </div>
