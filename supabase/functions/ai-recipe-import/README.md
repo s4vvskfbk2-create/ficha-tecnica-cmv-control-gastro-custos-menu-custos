@@ -18,12 +18,13 @@ supabase functions deploy ai-recipe-import
 
 ## Auth atual
 
-- **MVP:** aceita anon (`verify_jwt = false` em `supabase/config.toml`) para
-  permitir testes antes do login completo.
-- **Produção SaaS:** mudar para `verify_jwt = true` e exigir usuário logado.
-  Com `supabase.functions.invoke`, a sessão é enviada automaticamente quando
+- **Produção:** exige usuário autenticado (`verify_jwt = true` em `supabase/config.toml`).
+- A função também valida a sessão em `/auth/v1/user` antes de ler `OPENAI_API_KEY`.
+  Isso bloqueia o fallback do `supabase-js` que envia `Authorization: Bearer <anon key>` quando não há usuário logado.
+- Com `supabase.functions.invoke`, a sessão é enviada automaticamente quando
   existir usuário autenticado; em `fetch` manual, envie
   `Authorization: Bearer <access_token>`.
+- Para demonstração sem backend/login, use o fallback local de texto no frontend; ele não chama IA.
 
 ## Request
 
@@ -65,7 +66,7 @@ Também aceita os nomes legados `text`, `imageBase64` e `imageMimeType`.
 
 ## Erros (campo `code`)
 
-`missing_input` · `text_too_large` · `image_too_large` ·
+`auth_required` · `invalid_session` · `missing_supabase_url` · `missing_input` · `text_too_large` · `image_too_large` ·
 `unsupported_image_type` · `rate_limit_exceeded` · `missing_openai_key` ·
 `openai_error` · `missing_structured_output` · `invalid_ai_json`.
 O frontend exibe o campo `error` ao usuário.
