@@ -1,355 +1,152 @@
-import { useEffect, useMemo, useState } from 'react'
-import { repo } from '../lib/db'
-import {
-  calcularFicha,
-  custoItem,
-  custoUnitario,
-  formatBRL,
-  formatNum,
-  formatPct,
-} from '../lib/calc'
-import { exportFichaExcel } from '../lib/excel'
-import { exportFichaPDF } from '../lib/pdf'
-import type {
-  FichaItem,
-  FichaTecnica,
-  FichaTecnicaInput,
-  Mercadoria,
-} from '../lib/types'
+import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useStore } from '../lib/store'
+import { calcularFicha, formatBRL, formatPct } from '../lib/calc'
+import { avaliarCMV } from '../lib/benchmark'
+import type { ReceitaInput, ReceitaTipo, Unidade } from '../lib/types'
+import { UNIDADES } from '../lib/types'
 
-const novaFicha: FichaTecnicaInput = {
-  nome: 'Nova ficha',
+const novaReceita = (tipo: ReceitaTipo): Omit<ReceitaInput, 'estabelecimento_id'> => ({
+  nome: '',
   categoria: '',
-  rendimento: 1,
+  tipo,
+  rendimento_valor: 1,
+  rendimento_unidade: tipo === 'cardapio' ? 'un' : 'g',
+  rendimento_final_peso: 0,
+  tempo_preparo_min: 0,
+  validade_congelado_dias: 0,
+  validade_refrigerado_dias: 0,
+  validade_ambiente_dias: 0,
   preco_venda: 0,
+  cmv_meta: 0.3,
   modo_preparo: '',
-}
+  observacoes: '',
+})
 
 export default function FichasPage() {
-  const [fichas, setFichas] = useState<FichaTecnica[]>([])
-  const [mercadorias, setMercadorias] = useState<Mercadoria[]>([])
-  const [selId, setSelId] = useState<string | null>(null)
-  const [itens, setItens] = useState<FichaItem[]>([])
-  const [loading, setLoading] = useState(true)
+  const { snapshot, calcCtx, estabelecimento, criarReceita, excluirReceita } = useStore()
+  const navigate = useNavigate()
+  const [novo, setNovo] = useState(false)
+  const [form, setForm] = useState(novaReceita('cardapio'))
+  const [filtroTipo, setFiltroTipo] = useState<'todos' | ReceitaTipo>('todos')
 
-  const mercMap = useMemo(() => new Map(mercadorias.map((m) => [m.id, m])), [mercadorias])
-  const selecionada = fichas.find((f) => f.id === selId) ?? null
+  const fichas = useMemo(() => {
+    return snapshot.receitas
+      .filter((r) => filtroTipo === 'todos' || r.tipo === filtroTipo)
+      .map((r) => ({ receita: r, calc: calcularFicha(r, calcCtx) }))
+  }, [snapshot.receitas, calcCtx, filtroTipo])
 
-  async function refreshFichas() {
-    const list = await repo.listFichas()
-    setFichas(list)
-    return list
+  async function criar(e: React.FormEvent) {
+    e.preventDefault()
+    if (!form.nome.trim() || !estabelecimento) return
+    const r = await criarReceita({ ...form, estabelecimento_id: estabelecimento.id })
+    setNovo(false)
+    setForm(novaReceita('cardapio'))
+    navigate(`/fichas/${r.id}`)
   }
-
-  useEffect(() => {
-    ;(async () => {
-      setLoading(true)
-      const [, list] = await Promise.all([
-        repo.listMercadorias().then(setMercadorias),
-        refreshFichas(),
-      ])
-      if (list.length && !selId) setSelId(list[0].id)
-      setLoading(false)
-    })()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  useEffect(() => {
-    if (!selId) {
-      setItens([])
-      return
-    }
-    repo.listItens(selId).then(setItens)
-  }, [selId])
-
-  async function criarFicha() {
-    const f = await repo.createFicha(novaFicha)
-    await refreshFichas()
-    setSelId(f.id)
-  }
-
-  async function excluirFicha(f: FichaTecnica) {
-    if (!confirm(`Excluir a ficha "${f.nome}"?`)) return
-    await repo.deleteFicha(f.id)
-    const list = await refreshFichas()
-    setSelId(list[0]?.id ?? null)
-  }
-
-  async function salvarCampos(patch: Partial<FichaTecnicaInput>) {
-    if (!selecionada) return
-    const updated = { ...selecionada, ...patch }
-    setFichas((prev) => prev.map((f) => (f.id === selecionada.id ? updated : f)))
-    await repo.updateFicha(selecionada.id, patch)
-  }
-
-  async function persistItens(next: FichaItem[]) {
-    if (!selId) return
-    setItens(next)
-    await repo.setItens(
-      selId,
-      next.map(({ mercadoria_id, quantidade }) => ({ ficha_id: selId, mercadoria_id, quantidade })),
-    )
-    // Recarrega para obter ids reais gerados pelo repositório.
-    setItens(await repo.listItens(selId))
-  }
-
-  function addItem(mercadoriaId: string) {
-    if (!selId || !mercadoriaId) return
-    if (itens.some((i) => i.mercadoria_id === mercadoriaId)) return
-    persistItens([
-      ...itens,
-      { id: `tmp-${mercadoriaId}`, ficha_id: selId, mercadoria_id: mercadoriaId, quantidade: 0 },
-    ])
-  }
-
-  function updateQtd(itemId: string, quantidade: number) {
-    setItens((prev) => prev.map((i) => (i.id === itemId ? { ...i, quantidade } : i)))
-  }
-
-  function commitQtd() {
-    persistItens(itens)
-  }
-
-  function removeItem(itemId: string) {
-    persistItens(itens.filter((i) => i.id !== itemId))
-  }
-
-  const calc = selecionada
-    ? calcularFicha(selecionada, itens, mercMap)
-    : { custoTotal: 0, custoPorcao: 0, cmvPct: 0, margem: 0 }
-
-  const cmvClass = calc.cmvPct <= 30 ? 'good' : calc.cmvPct <= 38 ? 'warn' : 'danger'
-
-  if (loading) return <div className="empty">Carregando…</div>
 
   return (
     <>
       <div className="page-head">
         <div>
           <h1>Fichas Técnicas</h1>
-          <div className="sub">Monte receitas, calcule custo, CMV% e margem.</div>
+          <div className="sub">Receitas de cardápio e de produção (subfichas) — {estabelecimento?.nome}.</div>
         </div>
-        <button className="btn primary" onClick={criarFicha}>
-          + Nova ficha
-        </button>
-      </div>
-
-      {fichas.length === 0 ? (
-        <div className="card empty">
-          Nenhuma ficha técnica ainda. Clique em <strong>“+ Nova ficha”</strong> para começar.
-        </div>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 18, alignItems: 'start' }}>
-          <div className="card" style={{ padding: 8 }}>
-            {fichas.map((f) => (
-              <button
-                key={f.id}
-                onClick={() => setSelId(f.id)}
-                className="btn"
-                style={{
-                  width: '100%',
-                  textAlign: 'left',
-                  marginBottom: 4,
-                  border: 'none',
-                  background: f.id === selId ? 'var(--accent-soft)' : 'transparent',
-                  color: f.id === selId ? 'var(--accent)' : 'inherit',
-                }}
-              >
-                <strong>{f.nome}</strong>
-                <div className="sub">{f.categoria || 'Sem categoria'}</div>
+        <div className="toolbar">
+          <div className="tabs">
+            {(['todos', 'cardapio', 'producao'] as const).map((t) => (
+              <button key={t} className={filtroTipo === t ? 'active' : ''} onClick={() => setFiltroTipo(t)}>
+                {t === 'todos' ? 'Todas' : t === 'cardapio' ? 'Cardápio' : 'Produção'}
               </button>
             ))}
           </div>
-
-          {selecionada && (
-            <div>
-              <div className="card">
-                <div className="form-grid">
-                  <div style={{ gridColumn: '1 / -1' }}>
-                    <label>Nome do prato</label>
-                    <input
-                      value={selecionada.nome}
-                      onChange={(e) => salvarCampos({ nome: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label>Categoria</label>
-                    <input
-                      value={selecionada.categoria ?? ''}
-                      onChange={(e) => salvarCampos({ categoria: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label>Rendimento (porções)</label>
-                    <input
-                      type="number"
-                      min={1}
-                      step="any"
-                      value={selecionada.rendimento || ''}
-                      onChange={(e) => salvarCampos({ rendimento: Number(e.target.value) })}
-                    />
-                  </div>
-                  <div>
-                    <label>Preço de venda / porção (R$)</label>
-                    <input
-                      type="number"
-                      min={0}
-                      step="any"
-                      value={selecionada.preco_venda || ''}
-                      onChange={(e) => salvarCampos({ preco_venda: Number(e.target.value) })}
-                    />
-                  </div>
-                </div>
-                <div style={{ marginTop: 12 }}>
-                  <label>Modo de preparo</label>
-                  <textarea
-                    rows={2}
-                    value={selecionada.modo_preparo ?? ''}
-                    onChange={(e) => salvarCampos({ modo_preparo: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div className="card">
-                <div className="page-head" style={{ marginBottom: 12 }}>
-                  <strong>Itens da receita</strong>
-                  <AddItemSelect mercadorias={mercadorias} onAdd={addItem} usados={itens.map((i) => i.mercadoria_id)} />
-                </div>
-
-                {itens.length === 0 ? (
-                  <div className="empty">Adicione mercadorias para compor a receita.</div>
-                ) : (
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Mercadoria</th>
-                        <th className="num">Custo unit.</th>
-                        <th className="num" style={{ width: 130 }}>
-                          Quantidade
-                        </th>
-                        <th className="num">Custo</th>
-                        <th />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {itens.map((item) => {
-                        const m = mercMap.get(item.mercadoria_id)
-                        return (
-                          <tr key={item.id}>
-                            <td>{m?.nome ?? '(removida)'}</td>
-                            <td className="num">{m ? formatBRL(custoUnitario(m)) : '—'}</td>
-                            <td className="num">
-                              <div className="row" style={{ justifyContent: 'flex-end' }}>
-                                <input
-                                  type="number"
-                                  min={0}
-                                  step="any"
-                                  style={{ width: 90, textAlign: 'right' }}
-                                  value={item.quantidade || ''}
-                                  onChange={(e) => updateQtd(item.id, Number(e.target.value))}
-                                  onBlur={commitQtd}
-                                />
-                                <span className="sub">{m?.unidade}</span>
-                              </div>
-                            </td>
-                            <td className="num">{m ? formatBRL(custoItem(item, m)) : '—'}</td>
-                            <td className="num">
-                              <button className="btn sm ghost" onClick={() => removeItem(item.id)}>
-                                ✕
-                              </button>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-
-              <div className="card">
-                <div className="metrics">
-                  <div className="metric">
-                    <div className="label">Custo total</div>
-                    <div className="value">{formatBRL(calc.custoTotal)}</div>
-                  </div>
-                  <div className="metric">
-                    <div className="label">Custo / porção</div>
-                    <div className="value">{formatBRL(calc.custoPorcao)}</div>
-                  </div>
-                  <div className="metric">
-                    <div className="label">CMV %</div>
-                    <div className={`value ${cmvClass}`}>{formatPct(calc.cmvPct)}</div>
-                  </div>
-                  <div className="metric">
-                    <div className="label">Margem / porção</div>
-                    <div className={`value ${calc.margem >= 0 ? 'good' : 'danger'}`}>
-                      {formatBRL(calc.margem)}
-                    </div>
-                  </div>
-                </div>
-                <div className="toolbar" style={{ marginTop: 16 }}>
-                  <button
-                    className="btn primary"
-                    onClick={() => exportFichaExcel(selecionada, itens, mercMap)}
-                  >
-                    ⬇ Excel (fórmulas vivas)
-                  </button>
-                  <button className="btn" onClick={() => exportFichaPDF(selecionada, itens, mercMap)}>
-                    ⬇ PDF
-                  </button>
-                  <span className="grow" />
-                  <button className="btn ghost" onClick={() => excluirFicha(selecionada)}>
-                    Excluir ficha
-                  </button>
-                </div>
-                <div className="sub" style={{ marginTop: 8 }}>
-                  Rendimento: {formatNum(selecionada.rendimento)} porção(ões) · {itens.length} item(ns)
-                </div>
-              </div>
-            </div>
-          )}
+          <button className="btn primary" onClick={() => setNovo((v) => !v)}>+ Nova ficha</button>
         </div>
+      </div>
+
+      {novo && (
+        <form className="card" onSubmit={criar}>
+          <div className="form-grid">
+            <div>
+              <label>Nome</label>
+              <input autoFocus value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} placeholder="Ex.: Risoto de funghi" />
+            </div>
+            <div>
+              <label>Categoria</label>
+              <input value={form.categoria ?? ''} onChange={(e) => setForm({ ...form, categoria: e.target.value })} placeholder="Pratos principais" />
+            </div>
+            <div>
+              <label>Tipo</label>
+              <select value={form.tipo} onChange={(e) => setForm({ ...form, tipo: e.target.value as ReceitaTipo })}>
+                <option value="cardapio">Cardápio (venda)</option>
+                <option value="producao">Produção (subficha)</option>
+              </select>
+            </div>
+            <div>
+              <label>Rendimento</label>
+              <input type="number" min={0} step="any" value={form.rendimento_valor || ''} onChange={(e) => setForm({ ...form, rendimento_valor: Number(e.target.value) })} />
+            </div>
+            <div>
+              <label>Unidade rend.</label>
+              <select value={form.rendimento_unidade} onChange={(e) => setForm({ ...form, rendimento_unidade: e.target.value as Unidade })}>
+                {UNIDADES.map((u) => <option key={u} value={u}>{u}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="row mt" style={{ justifyContent: 'flex-end' }}>
+            <button type="button" className="btn" onClick={() => setNovo(false)}>Cancelar</button>
+            <button type="submit" className="btn primary">Criar e editar</button>
+          </div>
+        </form>
       )}
+
+      <div className="card" style={{ padding: 0 }}>
+        {fichas.length === 0 ? (
+          <div className="empty">Nenhuma ficha cadastrada. Clique em “+ Nova ficha”.</div>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Ficha</th>
+                <th>Tipo</th>
+                <th className="num">Custo/porção</th>
+                <th className="num">Preço</th>
+                <th className="num">CMV</th>
+                <th>Status</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {fichas.map(({ receita, calc }) => {
+                const status = avaliarCMV(calc.cmvPct, estabelecimento?.segmento ?? 'outro')
+                return (
+                  <tr key={receita.id}>
+                    <td>
+                      <button className="link" onClick={() => navigate(`/fichas/${receita.id}`)}>{receita.nome}</button>
+                      {receita.categoria && <div className="muted-sm">{receita.categoria}</div>}
+                    </td>
+                    <td>
+                      <span className={`badge ${receita.tipo === 'cardapio' ? 'tipo' : 'prod'}`}>
+                        {receita.tipo === 'cardapio' ? 'Cardápio' : 'Produção'}
+                      </span>
+                    </td>
+                    <td className="num">{formatBRL(calc.custoPorcao)}</td>
+                    <td className="num">{receita.tipo === 'cardapio' ? formatBRL(receita.preco_venda) : '—'}</td>
+                    <td className="num">{receita.preco_venda > 0 ? formatPct(calc.cmvPct) : '—'}</td>
+                    <td>{receita.tipo === 'cardapio' ? <span className={`badge ${status.nivel}`}>{status.texto}</span> : <span className="muted-sm">subficha</span>}</td>
+                    <td className="num">
+                      <div className="row" style={{ justifyContent: 'flex-end' }}>
+                        <button className="btn sm" onClick={() => navigate(`/fichas/${receita.id}`)}>Abrir</button>
+                        <button className="btn sm ghost" onClick={() => excluirReceita(receita.id)}>Excluir</button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
     </>
-  )
-}
-
-function AddItemSelect({
-  mercadorias,
-  usados,
-  onAdd,
-}: {
-  mercadorias: Mercadoria[]
-  usados: string[]
-  onAdd: (id: string) => void
-}) {
-  const [value, setValue] = useState('')
-  const disponiveis = mercadorias.filter((m) => !usados.includes(m.id))
-
-  if (mercadorias.length === 0) {
-    return <span className="sub">Cadastre mercadorias primeiro.</span>
-  }
-
-  return (
-    <div className="row" style={{ width: 320 }}>
-      <select value={value} onChange={(e) => setValue(e.target.value)}>
-        <option value="">Adicionar mercadoria…</option>
-        {disponiveis.map((m) => (
-          <option key={m.id} value={m.id}>
-            {m.nome}
-          </option>
-        ))}
-      </select>
-      <button
-        className="btn sm primary"
-        disabled={!value}
-        onClick={() => {
-          onAdd(value)
-          setValue('')
-        }}
-      >
-        +
-      </button>
-    </div>
   )
 }
