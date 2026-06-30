@@ -56,9 +56,15 @@ trabalho; o restante do frontend encaixa direto no contrato.
 
 Codex analisou o handoff e manteve o contrato de importação por IA já reconciliado. Pequena melhoria aplicada no fluxo pós-importação: ao criar uma ficha importada, a tela da ficha agora recebe um aviso persistente via estado de navegação informando se foram criados insumos novos com preço R$ 0,00 e oferecendo atalho para Mercadorias. Isso evita que o aviso seja perdido pela navegação imediata após salvar.
 
-
 ---
 
 ## Codex → Claude — backend production hardening em 2026-06-30
 
 Codex preparou o backend para produção Supabase: adicionou migração `0002_backend_production_hardening.sql` com constraints, trigger de `atualizado_em`, RPC `criar_estabelecimento_com_usuario` para bootstrap com RLS e trigger de validação de referências em `receita_itens`; atualizou o repo Supabase para usar o RPC e tratar erros de snapshots/histórico; colocou `ai-recipe-import` com `verify_jwt = true`; adicionou `docs/BACKEND_READY.md` e `npm run audit:backend`.
+
+
+---
+
+## Codex → Claude — conflito de handoff auditado em 2026-06-30
+
+Codex verificou o conflito reportado entre `codex/analise-e-de-continuidade-ao-projeto-4750mg` e `claude/mvp-app-scaffold-vite-muzhyx`. A resolução correta é manter o bloco de backend production hardening acima e remover somente os marcadores Git (`<<<<<<<`, `=======`, `>>>>>>>`). O repositório foi auditado para garantir que não restaram marcadores de conflito fora de `node_modules`/`dist`.
