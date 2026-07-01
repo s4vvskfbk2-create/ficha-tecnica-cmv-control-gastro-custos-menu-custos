@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom'
+import { SpeedInsights } from '@vercel/speed-insights/react'
 import App from './App'
 import { AuthProvider, useAuth } from './lib/auth'
 import { StoreProvider } from './lib/store'
@@ -50,5 +51,6 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <AuthProvider>
       <AuthGate />
     </AuthProvider>
+    <SpeedInsights />
   </React.StrictMode>,
 )
