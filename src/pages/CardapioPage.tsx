@@ -52,7 +52,15 @@ export default function CardapioPage() {
             </thead>
             <tbody>
               {itens.map(({ r, c }) => {
-                const st = avaliarCMV(c.cmvPct, seg)
+                // Preço efetivo: fichas com preço automático usam o preço da meta
+                // (que já reflete o custo ao vivo). Assim a tabela muda sozinha
+                // quando o custo de um insumo muda.
+                const preco = r.preco_auto ? c.precoPorMeta : r.preco_venda
+                const cmv = preco > 0 ? (c.custoPorcao / preco) * 100 : 0
+                const margemRs = preco - c.custoPorcao
+                const margemPct = preco > 0 ? (margemRs / preco) * 100 : 0
+                const markup = c.custoPorcao > 0 ? preco / c.custoPorcao : 0
+                const st = avaliarCMV(cmv, seg)
                 return (
                   <tr key={r.id}>
                     <td>
@@ -61,24 +69,28 @@ export default function CardapioPage() {
                     </td>
                     <td className="num">{formatBRL(c.custoPorcao)}</td>
                     <td className="num">
-                      <input
-                        className="inline-input wide"
-                        type="number"
-                        min={0}
-                        step="any"
-                        defaultValue={r.preco_venda || ''}
-                        onBlur={(e) => {
-                          const v = Number(e.target.value)
-                          if (v !== r.preco_venda) setPreco(r.id, v)
-                        }}
-                      />
+                      {r.preco_auto ? (
+                        <span className="badge good" title="Calculado sozinho pela meta de CMV">🔒 {formatBRL(preco)}</span>
+                      ) : (
+                        <input
+                          className="inline-input wide"
+                          type="number"
+                          min={0}
+                          step="any"
+                          defaultValue={r.preco_venda || ''}
+                          onBlur={(e) => {
+                            const v = Number(e.target.value)
+                            if (v !== r.preco_venda) setPreco(r.id, v)
+                          }}
+                        />
+                      )}
                     </td>
                     <td className="num">
                       <span className="muted-sm" title={`Meta ${formatPct(r.cmv_meta * 100)}`}>{formatBRL(c.precoPorMeta)}</span>
                     </td>
-                    <td className="num">{r.preco_venda > 0 ? formatPct(c.cmvPct) : '—'}</td>
-                    <td className="num">{r.preco_venda > 0 ? `${formatBRL(c.margemRs)} · ${formatPct(c.margemPct)}` : '—'}</td>
-                    <td className="num">{c.markup > 0 ? formatX(c.markup) : '—'}</td>
+                    <td className="num">{preco > 0 ? formatPct(cmv) : '—'}</td>
+                    <td className="num">{preco > 0 ? `${formatBRL(margemRs)} · ${formatPct(margemPct)}` : '—'}</td>
+                    <td className="num">{markup > 0 ? formatX(markup) : '—'}</td>
                     <td><span className={`badge ${st.nivel}`}>{st.texto}</span></td>
                   </tr>
                 )

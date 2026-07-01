@@ -60,6 +60,21 @@ export default function FichaEditorPage() {
     return { ctx, ficha: calcularFicha(header, ctx) }
   }, [header, itens, extras, snapshot])
 
+  // Preço automático: quando ligado, o preço de venda segue sozinho o custo e a
+  // meta de CMV. Se o custo de um insumo mudar ou a meta (%) mudar, o preço se
+  // atualiza automaticamente — mantendo o CMV na meta escolhida.
+  useEffect(() => {
+    if (!header?.preco_auto) return
+    const custoPorcao = calc?.ficha.custoPorcao ?? 0
+    const meta = header.cmv_meta > 0 ? header.cmv_meta : 0.3
+    const novo = custoPorcao > 0 ? Math.round((custoPorcao / meta) * 100) / 100 : 0
+    if (Math.abs(novo - header.preco_venda) > 0.001) {
+      setHeader((h) => (h ? { ...h, preco_venda: novo } : h))
+      setDirty(true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [header?.preco_auto, header?.cmv_meta, calc?.ficha.custoPorcao])
+
   if (!receita || !header) {
     return (
       <div className="empty">
@@ -133,6 +148,7 @@ export default function FichaEditorPage() {
         validade_ambiente_dias: header.validade_ambiente_dias,
         preco_venda: header.preco_venda,
         cmv_meta: header.cmv_meta,
+        preco_auto: header.preco_auto,
         modo_preparo: header.modo_preparo,
         observacoes: header.observacoes,
       })
@@ -323,32 +339,52 @@ export default function FichaEditorPage() {
 
             {header.tipo === 'cardapio' && (
               <>
-                <div className="section-title mt">Precificação</div>
-                <div className="mb">
-                  <label>Preço de venda (R$)</label>
-                  <input type="number" min={0} step="any" value={header.preco_venda || ''} onChange={(e) => patch({ preco_venda: Number(e.target.value) })} />
+                <div className="section-title mt">Preço de venda</div>
+
+                <label className="switch-line">
+                  <input
+                    type="checkbox"
+                    checked={header.preco_auto}
+                    onChange={(e) => patch({ preco_auto: e.target.checked })}
+                  />
+                  <span><strong>Calcular o preço sozinho</strong> pela meta de CMV</span>
+                </label>
+                <div className="muted-sm mb">
+                  {header.preco_auto
+                    ? 'Ligado: mudou o custo de um ingrediente ou a meta abaixo? O preço se ajusta sozinho.'
+                    : 'Desligado: você digita o preço na mão. Ligue para o sistema calcular por você.'}
                 </div>
+
+                <div className="mb">
+                  <label>{header.preco_auto ? 'Preço de venda (calculado)' : 'Preço de venda (R$)'}</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={header.preco_venda ? Math.round(header.preco_venda * 100) / 100 : ''}
+                    readOnly={header.preco_auto}
+                    onChange={(e) => patch({ preco_venda: Number(e.target.value) })}
+                    style={header.preco_auto ? { background: '#f1f5f9', fontWeight: 700 } : undefined}
+                  />
+                </div>
+
+                <div className="mb">
+                  <label>Meta de CMV — quanto do preço é ingrediente (%)</label>
+                  <input type="number" min={0} max={100} step="any" value={header.cmv_meta ? Math.round(header.cmv_meta * 1000) / 10 : ''} onChange={(e) => patch({ cmv_meta: Number(e.target.value) / 100 })} />
+                  <div className="muted-sm">Ex.: 30% significa que o custo é 30% do preço. Menor = mais lucro.</div>
+                </div>
+
+                {!header.preco_auto && (
+                  <button className="btn mb" style={{ width: '100%' }} disabled={f.precoPorMeta <= 0} onClick={() => patch({ preco_venda: Math.round(f.precoPorMeta * 100) / 100 })}>
+                    Usar preço sugerido: {formatBRL(f.precoPorMeta)}
+                  </button>
+                )}
+
+                <div className="section-title mt">Resultado (atualiza sozinho)</div>
                 <Indicador label="CMV %" valor={formatPct(f.cmvPct)} badge={<span className={`badge ${status.nivel}`}>{status.texto}</span>} />
-                <Indicador label="Margem de contribuição" valor={`${formatBRL(f.margemRs)} · ${formatPct(f.margemPct)}`} />
+                <Indicador label="Lucro por porção" valor={`${formatBRL(f.margemRs)} · ${formatPct(f.margemPct)}`} forte />
                 <Indicador label="Markup" valor={formatX(f.markup)} />
                 <Indicador label="Preço psicológico" valor={formatBRL(f.precoPsicologico)} />
-
-                <div className="section-title mt">Simulador por meta de CMV</div>
-                <div className="row">
-                  <div className="grow">
-                    <label>Meta de CMV</label>
-                    <input type="number" min={0} max={100} step="any" value={header.cmv_meta ? Math.round(header.cmv_meta * 1000) / 10 : ''} onChange={(e) => patch({ cmv_meta: Number(e.target.value) / 100 })} />
-                  </div>
-                  <div className="grow right">
-                    <label>Preço sugerido</label>
-                    <div className="metric" style={{ padding: '8px 10px' }}>
-                      <div className="value" style={{ fontSize: 18 }}>{formatBRL(f.precoPorMeta)}</div>
-                    </div>
-                  </div>
-                </div>
-                <button className="btn mt" style={{ width: '100%' }} disabled={f.precoPorMeta <= 0} onClick={() => patch({ preco_venda: Math.round(f.precoPorMeta * 100) / 100 })}>
-                  Aplicar preço da meta
-                </button>
               </>
             )}
           </div>

@@ -87,6 +87,8 @@ export interface Receita {
   preco_venda: number
   /** Meta de CMV (decimal, ex.: 0.30) para o simulador de preço. */
   cmv_meta: number
+  /** Quando true, o preço de venda é calculado sozinho pela meta de CMV. */
+  preco_auto: boolean
   modo_preparo: string | null
   observacoes: string | null
   created_at: string
