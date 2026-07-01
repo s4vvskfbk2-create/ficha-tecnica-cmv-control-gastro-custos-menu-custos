@@ -19,6 +19,7 @@ const novaReceita = (tipo: ReceitaTipo): Omit<ReceitaInput, 'estabelecimento_id'
   validade_ambiente_dias: 0,
   preco_venda: 0,
   cmv_meta: 0.3,
+  preco_auto: false,
   modo_preparo: '',
   observacoes: '',
 })

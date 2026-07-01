@@ -190,6 +190,7 @@ export default function ImportarReceitaPage() {
         validade_ambiente_dias: 0,
         preco_venda: revisao.preco_venda || 0,
         cmv_meta: 0.3,
+        preco_auto: false,
         modo_preparo: revisao.modo_preparo.trim() || null,
         observacoes: revisao.avisos.length ? `Avisos da importação:\n- ${revisao.avisos.join('\n- ')}` : null,
       })
@@ -267,12 +268,28 @@ export default function ImportarReceitaPage() {
 
           <div className="card">
             <label>2. Foto ou print da receita (opcional)</label>
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={(e) => onPickImage(e.target.files?.[0] ?? null)}
-            />
+            <div className="muted-sm mb">Escolha uma foto que já está no celular ou tire uma agora.</div>
+            <div className="import-actions">
+              <label className="btn lg" style={{ cursor: 'pointer', textAlign: 'center' }}>
+                🖼️ Escolher da galeria
+                <input
+                  type="file"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  onChange={(e) => onPickImage(e.target.files?.[0] ?? null)}
+                />
+              </label>
+              <label className="btn lg" style={{ cursor: 'pointer', textAlign: 'center' }}>
+                📷 Tirar foto
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  style={{ display: 'none' }}
+                  onChange={(e) => onPickImage(e.target.files?.[0] ?? null)}
+                />
+              </label>
+            </div>
             {imagemPreview && (
               <div className="mt">
                 <img src={imagemPreview} alt="Prévia da receita" className="import-preview" />
